@@ -1,0 +1,8 @@
+{
+  "name": "recepcion-animo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/emotion.test.js tests/sesion.test.js tests/supabase.test.js"
+  }
+}

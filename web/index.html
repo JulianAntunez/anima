@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ánima · Hospitalidad que se anticipa</title>
+  <meta name="description" content="Indicador en tiempo real de la expresión facial de los clientes en la recepción de un hotel. El análisis ocurre en el navegador y no se guardan imágenes.">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<section id="login" class="inicio" hidden>
+  <form id="login-form" class="inicio-card" autocomplete="on">
+    <div class="marca"><i class="ti ti-lock" aria-hidden="true"></i></div>
+    <h1>Ingresar</h1>
+    <p class="lede">Acceso solo para el personal del hotel.</p>
+    <label class="campo"><span>Correo</span><input id="login-email" type="email" autocomplete="username" required></label>
+    <label class="campo"><span>Contraseña</span><input id="login-pass" type="password" autocomplete="current-password" required></label>
+    <div class="acciones"><button id="btn-login" class="primario" type="submit"><i class="ti ti-login" aria-hidden="true"></i>Ingresar</button></div>
+    <p id="login-error" class="error" role="alert" hidden></p>
+  </form>
+</section>
+
+<section id="inicio" class="inicio" hidden>
+  <div class="inicio-card">
+    <div class="marca"><i class="ti ti-building-skyscraper" aria-hidden="true"></i></div>
+    <h1>Ánima</h1>
+    <p class="lede">Hospitalidad que se anticipa. El pulso de tu recepción.</p>
+
+    <ul class="garantias">
+      <li><i class="ti ti-device-laptop" aria-hidden="true"></i>El análisis ocurre en este navegador. No se envía ni se guarda ninguna imagen.</li>
+      <li><i class="ti ti-chart-bar" aria-hidden="true"></i>Solo se registran etiquetas y horarios, de forma anónima y agregada.</li>
+      <li><i class="ti ti-info-circle" aria-hidden="true"></i>Es un indicador aproximado de la expresión facial, no un juicio sobre una persona.</li>
+    </ul>
+
+    <label class="consent">
+      <input type="checkbox" id="consent">
+      <span>Confirmo que hay un cartel visible que informa a los clientes sobre el uso de la cámara.</span>
+    </label>
+
+    <div class="acciones">
+      <button id="btn-camara" class="primario" disabled><i class="ti ti-camera" aria-hidden="true"></i>Iniciar con cámara</button>
+      <button id="btn-demo" class="secundario"><i class="ti ti-player-play" aria-hidden="true"></i>Probar sin cámara</button>
+    </div>
+    <p id="inicio-error" class="error" role="alert" hidden></p>
+  </div>
+</section>
+
+<main id="app" hidden>
+  <header class="barra">
+    <div class="barra-izq">
+      <span class="marca chica"><i class="ti ti-building-skyscraper" aria-hidden="true"></i></span>
+      <div>
+        <div class="titulo">Ánima · Mostrador 1</div>
+        <div class="sub" id="modo-texto">Modo local</div>
+      </div>
+    </div>
+    <div class="barra-der">
+      <span class="estado"><span id="punto" class="punto"></span><span id="estado-texto">Cámara activa</span></span>
+      <span id="reloj" class="reloj">--:--</span>
+      <select id="camara" aria-label="Cámara" hidden></select>
+      <button id="btn-calibrar" title="Medir tu cara neutra para ajustar la lectura"><i class="ti ti-adjustments" aria-hidden="true"></i>Calibrar</button>
+      <button id="btn-pausa"><i class="ti ti-player-pause" aria-hidden="true"></i><span>Pausar</span></button>
+      <button id="btn-csv" title="Descargar el día en CSV"><i class="ti ti-download" aria-hidden="true"></i>CSV</button>
+      <button id="btn-salir" hidden title="Cerrar sesión"><i class="ti ti-logout" aria-hidden="true"></i>Salir</button>
+      <button id="btn-borrar" class="peligro" title="Borrar los datos guardados"><i class="ti ti-trash" aria-hidden="true"></i></button>
+    </div>
+  </header>
+
+  <section class="metricas" aria-label="Resumen del día">
+    <div class="metrica"><span class="m-label">Clientes hoy</span><span class="m-valor" id="m-clientes">0</span></div>
+    <div class="metrica"><span class="m-label">Índice de ánimo</span><span class="m-valor" id="m-indice">–</span></div>
+    <div class="metrica"><span class="m-label">Alertas</span><span class="m-valor" id="m-alertas">0</span></div>
+    <div class="metrica"><span class="m-label">Tiempo medio</span><span class="m-valor" id="m-tiempo">–</span></div>
+  </section>
+
+  <div class="grilla">
+    <section class="card foco" aria-label="Cliente en el mostrador">
+      <div id="alerta" class="aviso-alerta" role="alert" hidden>
+        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+        <span id="alerta-texto">Atención sugerida: el cliente parece molesto.</span>
+        <button id="alerta-ok">Entendido</button>
+      </div>
+
+      <div class="foco-cuerpo">
+        <div class="escenario" id="escenario">
+          <video id="video" playsinline muted></video>
+          <div id="placeholder" class="placeholder"><i class="ti ti-user" aria-hidden="true"></i><span id="placeholder-texto">Esperando cámara</span></div>
+          <div id="caja" class="caja" hidden><span id="chip" class="chip"></span></div>
+        </div>
+
+        <div class="lectura">
+          <div id="animo" class="animo tono-neutral">
+            <span class="a-label">Estado de ánimo</span>
+            <span id="animo-nombre" class="a-nombre">Sin cliente</span>
+            <div class="barra-conf"><div id="conf-barra"></div></div>
+            <span id="conf-texto" class="a-conf">&nbsp;</span>
+          </div>
+          <div class="sugerencia">
+            <span class="s-label">Sugerencia</span>
+            <p id="sugerencia">No hay una persona frente al mostrador.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="linea">
+        <span class="l-label">Últimos 2 minutos</span>
+        <div id="linea" class="linea-barra"></div>
+      </div>
+    </section>
+
+    <aside class="derecha">
+      <section class="card">
+        <h2>Últimas atenciones</h2>
+        <ul id="lista" class="lista"><li class="vacio">Todavía no hay atenciones registradas hoy.</li></ul>
+      </section>
+      <section class="card">
+        <h2>Ánimo por hora</h2>
+        <div id="horas" class="horas"></div>
+        <div class="leyenda">
+          <span><i class="sw sw-positivo"></i>Satisfecho</span>
+          <span><i class="sw sw-neutral"></i>Tranquilo</span>
+          <span><i class="sw sw-atencion"></i>Atención</span>
+          <span><i class="sw sw-alerta"></i>Molesto</span>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <footer class="pie">
+    <i class="ti ti-lock" aria-hidden="true"></i>
+    <span>El análisis ocurre en este navegador. Solo se guardan etiquetas y horarios, nunca imágenes. Indicador aproximado de expresión facial, no un diagnóstico de la persona.</span>
+  </footer>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
