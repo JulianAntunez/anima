@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/emotion.test.js tests/sesion.test.js tests/supabase.test.js tests/informe.test.js"
+    "test": "node --test tests/emotion.test.js tests/sesion.test.js tests/supabase.test.js tests/informe.test.js tests/cliente.test.js"
   }
 }

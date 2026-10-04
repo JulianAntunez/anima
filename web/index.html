@@ -112,6 +112,22 @@
     </section>
 
     <aside class="derecha">
+      <section class="card" aria-label="Cliente en el mostrador">
+        <h2>Cliente en el mostrador</h2>
+        <form id="form-cliente" class="form-cliente" autocomplete="off">
+          <label class="campo"><span>Nombre</span><input id="cli-in-nombre" type="text" maxlength="60" placeholder="Ej.: Julián Antúnez"></label>
+          <div class="fila2">
+            <label class="campo"><span>Habitación</span><input id="cli-in-hab" type="text" maxlength="12" placeholder="402"></label>
+            <label class="campo"><span>Estadía</span><input id="cli-in-estadia" type="text" maxlength="40" placeholder="Hasta el 07/10"></label>
+          </div>
+          <div class="botones">
+            <button type="button" id="btn-abrir-cliente"><i class="ti ti-device-desktop" aria-hidden="true"></i>Abrir pantalla del cliente</button>
+            <button type="submit" class="primario"><i class="ti ti-send" aria-hidden="true"></i>Mostrar al cliente</button>
+            <button type="button" id="btn-limpiar-cliente"><i class="ti ti-eraser" aria-hidden="true"></i>Limpiar</button>
+          </div>
+          <p id="cli-estado" class="estado-cli" role="status"></p>
+        </form>
+      </section>
       <section class="card">
         <h2>Últimas atenciones</h2>
         <ul id="lista" class="lista"><li class="vacio">Todavía no hay atenciones registradas hoy.</li></ul>

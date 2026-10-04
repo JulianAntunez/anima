@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ánima · Pantalla del cliente</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="pantalla-cliente">
+<main class="cli">
+  <header class="cli-marca">
+    <i class="ti ti-building-skyscraper" aria-hidden="true"></i>
+    <span>Ánima · Hospitalidad que se anticipa</span>
+    <button id="btn-pantalla" class="cli-boton" title="Pantalla completa" aria-label="Pantalla completa"><i class="ti ti-arrows-maximize" aria-hidden="true"></i></button>
+  </header>
+
+  <section class="cli-saludo">
+    <h1 id="cli-saludo">Te damos la bienvenida</h1>
+    <p id="cli-datos" class="cli-datos"></p>
+  </section>
+
+  <section class="cli-cuerpo">
+    <div class="escenario cli-escenario" id="cli-escenario">
+      <video id="cli-video" playsinline muted></video>
+      <div id="cli-placeholder" class="placeholder"><i class="ti ti-user" aria-hidden="true"></i><span id="cli-placeholder-texto">Esperando al mostrador…</span></div>
+      <div id="cli-caja" class="caja" hidden></div>
+    </div>
+
+    <div id="cli-animo" class="animo cli-animo tono-neutral" aria-live="polite">
+      <i id="cli-icono" class="ti ti-user cli-icono" aria-hidden="true"></i>
+      <span id="cli-nombre" class="a-nombre">Bienvenido</span>
+      <span id="cli-mensaje" class="cli-mensaje">Acercate al mostrador, enseguida te atendemos.</span>
+    </div>
+  </section>
+
+  <div class="cli-acciones">
+    <button id="btn-ocultar"><i class="ti ti-eye-off" aria-hidden="true"></i><span>Ocultar mi expresión</span></button>
+  </div>
+
+  <p class="cli-privacidad"><i class="ti ti-lock" aria-hidden="true"></i>Tu imagen no se guarda. Esta pantalla solo muestra tu expresión en este momento.</p>
+</main>
+
+<script type="module" src="js/cliente.js"></script>
+</body>
+</html>

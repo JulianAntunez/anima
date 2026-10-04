@@ -4,8 +4,12 @@ import { Sesion } from "./sesion.js";
 import { LocalStore, SupabaseStore, resumir, porHora, aCSV, dia } from "./store.js";
 import { construirInforme } from "./informe.js";
 import { CONFIG } from "./config.js";
+import { CANAL, datosCliente } from "./canal.js";
 
 const $ = (id) => document.getElementById(id);
+const canal = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(CANAL) : null;
+let datosActuales = datosCliente();
+let estadoCanal = { tipo: "estado", activo: false, demo: false };
 const SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 const JSPDF = "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/+esm";
 
@@ -61,11 +65,39 @@ const hhmm = (ts) => new Date(ts).toLocaleTimeString("es-AR", { hour: "2-digit",
 function setEstado(texto, clase = "") {
   $("estado-texto").textContent = texto;
   $("punto").className = `punto ${clase}`;
+  estadoCanal = { tipo: "estado", activo: clase !== "pausa", demo: clase === "demo" };
+  canal?.postMessage(estadoCanal);
+}
+
+/* ---------- pantalla del cliente ---------- */
+
+function mostrarAlCliente(e) {
+  e.preventDefault();
+  datosActuales = datosCliente({ nombre: $("cli-in-nombre").value, habitacion: $("cli-in-hab").value, estadia: $("cli-in-estadia").value });
+  canal?.postMessage(datosActuales);
+  $("cli-estado").textContent = datosActuales.nombre ? `Mostrando a ${datosActuales.nombre} en la pantalla del cliente.` : "Pantalla del cliente sin nombre.";
+}
+
+function limpiarCliente() {
+  for (const id of ["cli-in-nombre", "cli-in-hab", "cli-in-estadia"]) $(id).value = "";
+  datosActuales = datosCliente();
+  canal?.postMessage(datosActuales);
+  $("cli-estado").textContent = "Datos del cliente borrados.";
+}
+
+if (canal) {
+  canal.onmessage = ({ data }) => {
+    if (data?.tipo === "hola") {
+      canal.postMessage(datosActuales);
+      canal.postMessage(estadoCanal);
+    }
+  };
 }
 
 /* ---------- render ---------- */
 
 function renderFoco(lectura, caja) {
+  canal?.postMessage({ tipo: "lectura", emocion: lectura ? lectura.emocion : null, confianza: lectura ? lectura.confianza : 0, caja: caja || null });
   const animo = animoDe(lectura ? lectura.emocion : "ninguno");
   const tono = animo.tono;
   $("animo").className = `animo tono-${tono}`;
@@ -610,6 +642,11 @@ $("btn-demo").addEventListener("click", async () => {
 $("btn-pausa").addEventListener("click", pausarReanudar);
 $("btn-calibrar").addEventListener("click", calibrar);
 $("btn-csv").addEventListener("click", descargarCSV);
+$("form-cliente").addEventListener("submit", mostrarAlCliente);
+$("btn-limpiar-cliente").addEventListener("click", limpiarCliente);
+$("btn-abrir-cliente").addEventListener("click", () => {
+  window.open("cliente.html", "anima-cliente", "popup,width=1100,height=760");
+});
 $("btn-pdf").addEventListener("click", () => $("dlg-pdf").showModal());
 $("form-pdf").addEventListener("submit", (e) => {
   if (e.submitter?.value === "ok") generarPDF(Number(new FormData(e.target).get("dias")));

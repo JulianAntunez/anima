@@ -28,7 +28,7 @@ jobs:
       - name: Preparar el sitio (solo lo necesario, sin tests ni SQL)
         run: |
           mkdir _site
-          cp -r web/index.html web/css web/js web/models _site/
+          cp -r web/index.html web/cliente.html web/css web/js web/models _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
