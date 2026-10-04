@@ -1,6 +1,6 @@
 # Ánima — Hospitalidad que se anticipa 🎭
 
-*El pulso de tu recepción.* Sistema de detección de rostros, clasificación de expresiones y reconocimiento opcional de huéspedes en tiempo real, con una web (carpeta `web/`) conectada a Supabase.
+Sistema de detección de rostros, clasificación de expresiones y reconocimiento opcional de huéspedes en tiempo real, con una web (carpeta `web/`) conectada a Supabase.
 
 Aplicación modular de visión por computadora y aprendizaje profundo optimizada para ejecutarse en tiempo real sobre **CPU estándar** en Windows 11. Integra **MediaPipe BlazeFace** para detección facial ultrarrápida, una red neuronal profunda **FER+ en ONNX Runtime** para clasificar 7 emociones humanas, telemetría continua en **CSV (ISO 8601)**, seguimiento multirrostro con suavizado temporal, una interfaz gráfica de escritorio en **OpenCV** y un dashboard interactivo en **Streamlit**.
 
