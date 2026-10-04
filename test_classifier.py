@@ -165,7 +165,7 @@ def procesar_imagen_estatica(
 
     for idx, det in enumerate(detecciones, start=1):
         x, y, w, h = det.box
-        crop = FaceDetector.crop_face(frame, det.box, margin=0.15)
+        crop = FaceDetector.crop_face(frame, det.box, margin=getattr(classifier, "crop_margin", 0.15))
         em_res = classifier.predict(crop) if crop is not None else None
 
         if em_res:
@@ -239,7 +239,7 @@ def procesar_webcam(
             # 2. Clasificación de emociones para cada rostro
             resultados_emociones = []
             for face_idx, det in enumerate(detecciones):
-                crop = FaceDetector.crop_face(frame, det.box, margin=0.15)
+                crop = FaceDetector.crop_face(frame, det.box, margin=getattr(classifier, "crop_margin", 0.15))
                 if crop is not None:
                     res = classifier.predict(crop)
                     if res:

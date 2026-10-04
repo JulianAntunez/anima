@@ -33,6 +33,7 @@ class EmotionClassifier:
         model_path: Optional[Union[str, Path]] = None,
         min_confidence: Optional[float] = None,
         labels: Optional[List[str]] = None,
+        neutral_bias: Optional[float] = None,
     ) -> None:
         """
         Inicializa el clasificador de emociones cargando el modelo ONNX.
@@ -48,6 +49,7 @@ class EmotionClassifier:
             else DEFAULT_CONFIG.emotion_confidence_threshold
         )
         self.labels = labels or list(DEFAULT_CONFIG.emotion_labels)
+        self.neutral_bias = float(neutral_bias if neutral_bias is not None else DEFAULT_CONFIG.neutral_bias)
 
         # Asegurar que el modelo exista localmente
         if not self.model_path.is_file():
@@ -161,6 +163,12 @@ class EmotionClassifier:
         # Tomamos las primeras 7 clases estándar requeridas por la especificación:
         logits_7 = logits[:7]
         probs = self._softmax(logits_7)
+
+        # FER+ favorece "neutral" (índice 0): restarle peso deja que expresiones leves ganen
+        if self.neutral_bias != 1.0:
+            probs = probs.copy()
+            probs[0] *= self.neutral_bias
+            probs /= probs.sum()
 
         # Construir diccionario de probabilidades para las 7 clases
         prob_dict: Dict[str, float] = {}
