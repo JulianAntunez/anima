@@ -63,6 +63,7 @@
       <button id="btn-calibrar" title="Medir tu cara neutra para ajustar la lectura"><i class="ti ti-adjustments" aria-hidden="true"></i>Calibrar</button>
       <button id="btn-pausa"><i class="ti ti-player-pause" aria-hidden="true"></i><span>Pausar</span></button>
       <button id="btn-csv" title="Descargar el día en CSV"><i class="ti ti-download" aria-hidden="true"></i>CSV</button>
+      <button id="btn-pdf" title="Generar un informe en PDF"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>PDF</button>
       <button id="btn-salir" hidden title="Cerrar sesión"><i class="ti ti-logout" aria-hidden="true"></i>Salir</button>
       <button id="btn-borrar" class="peligro" title="Borrar los datos guardados"><i class="ti ti-trash" aria-hidden="true"></i></button>
     </div>
@@ -133,6 +134,20 @@
     <span>El análisis ocurre en este navegador. Solo se guardan etiquetas y horarios, nunca imágenes. Indicador aproximado de expresión facial, no un diagnóstico de la persona.</span>
   </footer>
 </main>
+
+<dialog id="dlg-pdf" class="dlg">
+  <form id="form-pdf" method="dialog">
+    <h2>Informe en PDF</h2>
+    <p class="dlg-sub">Resumen del ánimo, franjas horarias y alertas del período elegido.</p>
+    <label class="opcion"><input type="radio" name="dias" value="1" checked>Hoy</label>
+    <label class="opcion"><input type="radio" name="dias" value="7">Últimos 7 días</label>
+    <label class="opcion"><input type="radio" name="dias" value="30">Últimos 30 días</label>
+    <div class="dlg-acciones">
+      <button value="cancel">Cancelar</button>
+      <button value="ok" class="primario"><i class="ti ti-download" aria-hidden="true"></i>Generar</button>
+    </div>
+  </form>
+</dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 

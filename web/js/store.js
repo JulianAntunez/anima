@@ -55,6 +55,16 @@ export class LocalStore {
     };
   }
 
+  async cargarRango(dias) {
+    const todo = { registros: [], episodios: [] };
+    for (let i = dias - 1; i >= 0; i--) {
+      const d = await this.cargarDia(dia(Date.now() - i * 86400000));
+      todo.registros.push(...d.registros);
+      todo.episodios.push(...d.episodios);
+    }
+    return todo;
+  }
+
   async borrarTodo() {
     const claves = [];
     for (let i = 0; i < this.storage.length; i++) {
@@ -121,7 +131,16 @@ export class SupabaseStore {
 
   async cargarDia(fecha = dia(Date.now())) {
     const desde = new Date(`${fecha}T00:00:00`);
-    const hasta = new Date(desde.getTime() + 86400000);
+    return this._consultar(desde, new Date(desde.getTime() + 86400000));
+  }
+
+  async cargarRango(dias) {
+    await this.vaciar();
+    const hoy = new Date(`${dia(Date.now())}T00:00:00`);
+    return this._consultar(new Date(hoy.getTime() - (dias - 1) * 86400000), new Date(hoy.getTime() + 86400000));
+  }
+
+  async _consultar(desde, hasta) {
     const [r, e] = await Promise.all([
       this.client.from("registros").select("ts,emocion,confianza,episodio").gte("ts", desde.toISOString()).lt("ts", hasta.toISOString()).order("ts").range(0, 9999),
       this.client.from("episodios").select("ref,inicio,fin,duracion_ms,dominante,alerta").gte("inicio", desde.toISOString()).lt("inicio", hasta.toISOString()).order("inicio").range(0, 9999),

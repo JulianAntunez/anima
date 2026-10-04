@@ -1,11 +1,13 @@
 import { probabilidades, promediar, ganadora, reposoDesdeMuestras } from "./emotion.js";
 import { animoDe, tonoDe, TONOS } from "./mood.js";
 import { Sesion } from "./sesion.js";
-import { LocalStore, SupabaseStore, resumir, porHora, aCSV } from "./store.js";
+import { LocalStore, SupabaseStore, resumir, porHora, aCSV, dia } from "./store.js";
+import { construirInforme } from "./informe.js";
 import { CONFIG } from "./config.js";
 
 const $ = (id) => document.getElementById(id);
 const SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+const JSPDF = "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/+esm";
 
 let cliente = null;
 let usuario = null;
@@ -475,6 +477,20 @@ function descargarCSV() {
   URL.revokeObjectURL(a.href);
 }
 
+async function generarPDF(dias) {
+  aviso("Generando informe…", 0);
+  try {
+    const datos = await estado.store.cargarRango(dias);
+    const { jsPDF } = await import(JSPDF);
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    construirInforme(doc, { datos, dias, usuario: usuario?.email || "" });
+    doc.save(`Anima_informe_${dia(Date.now())}.pdf`);
+    aviso("Informe descargado.");
+  } catch (e) {
+    aviso(`No se pudo generar el informe: ${e.message}`, 6000);
+  }
+}
+
 async function borrarDatos() {
   if (!confirm("¿Borrar todos los registros guardados? No se puede deshacer.")) return;
   try {
@@ -594,6 +610,10 @@ $("btn-demo").addEventListener("click", async () => {
 $("btn-pausa").addEventListener("click", pausarReanudar);
 $("btn-calibrar").addEventListener("click", calibrar);
 $("btn-csv").addEventListener("click", descargarCSV);
+$("btn-pdf").addEventListener("click", () => $("dlg-pdf").showModal());
+$("form-pdf").addEventListener("submit", (e) => {
+  if (e.submitter?.value === "ok") generarPDF(Number(new FormData(e.target).get("dias")));
+});
 $("btn-borrar").addEventListener("click", borrarDatos);
 $("alerta-ok").addEventListener("click", () => ($("alerta").hidden = true));
 $("camara").addEventListener("change", async (e) => {
