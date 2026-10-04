@@ -59,7 +59,7 @@
     <div class="barra-der">
       <span class="estado"><span id="punto" class="punto"></span><span id="estado-texto">Cámara activa</span></span>
       <span id="reloj" class="reloj">--:--</span>
-      <select id="camara" aria-label="Cámara" hidden></select>
+      <button id="btn-config" title="Configuración"><i class="ti ti-settings" aria-hidden="true"></i>Configuración</button>
       <button id="btn-calibrar" title="Medir tu cara neutra para ajustar la lectura"><i class="ti ti-adjustments" aria-hidden="true"></i>Calibrar</button>
       <button id="btn-pausa"><i class="ti ti-player-pause" aria-hidden="true"></i><span>Pausar</span></button>
       <button id="btn-csv" title="Descargar el día en CSV"><i class="ti ti-download" aria-hidden="true"></i>CSV</button>
@@ -174,6 +174,31 @@
     <div class="dlg-acciones">
       <button value="cancel">Cancelar</button>
       <button value="ok" class="primario"><i class="ti ti-download" aria-hidden="true"></i>Generar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-config" class="dlg">
+  <form id="form-config" method="dialog">
+    <h2>Configuración</h2>
+    <p class="dlg-sub">Los cambios se guardan en este navegador.</p>
+
+    <label class="campo"><span>Cámara</span><select id="cfg-camara" style="width:100%"></select></label>
+    <p id="cfg-ayuda" class="estado-cli"></p>
+    <div class="botones"><button type="button" id="cfg-detectar"><i class="ti ti-refresh" aria-hidden="true"></i>Detectar cámaras</button></div>
+
+    <label class="campo" style="margin-top:14px"><span>Sensibilidad a gestos leves</span>
+      <select id="cfg-sensibilidad" style="width:100%">
+        <option value="1">Baja</option>
+        <option value="0.8">Media</option>
+        <option value="0.6">Alta (recomendada)</option>
+        <option value="0.4">Muy alta</option>
+      </select>
+    </label>
+
+    <div class="dlg-acciones">
+      <button type="button" id="cfg-inicio" title="Cierra la sesión de trabajo y vuelve a la pantalla de inicio">Volver al inicio</button>
+      <button value="cerrar" class="primario">Listo</button>
     </div>
   </form>
 </dialog>

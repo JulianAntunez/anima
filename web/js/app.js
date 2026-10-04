@@ -43,6 +43,8 @@ const estado = {
 };
 
 try {
+  const nb = parseFloat(localStorage.getItem("neutralBias"));
+  if (nb > 0 && nb <= 1) estado.neutralBias = nb;
   estado.reposo = JSON.parse(localStorage.getItem("reposo") || "null");
 } catch {
   estado.reposo = null;
@@ -95,7 +97,14 @@ function limpiarCliente(texto = "Datos del cliente borrados.") {
 /* ---------- reconocimiento de clientes (vectores solo en este navegador) ---------- */
 
 const REG_MUESTRAS = 10;
-const rec = { listo: false, cargando: false, galeria: [], persona: null, auto: false, ocupado: false, ultimo: 0, sinRostroDesde: 0, registro: null };
+const rec = { listo: false, cargando: false, galeria: [], persona: null, auto: false, ocupado: false, ultimo: 0, sinRostroDesde: 0, vistoDesdeCarga: false, registro: null };
+const MS_RETIRO = 4000;
+
+// Se llama en cada cuadro con rostro: sirve para saber que el cliente sigue frente al mostrador.
+function marcarPresencia() {
+  rec.sinRostroDesde = 0;
+  rec.vistoDesdeCarga = true;
+}
 
 const textoRec = (t) => ($("rec-estado").textContent = t);
 const estadoRec = () => textoRec(`Reconocimiento activo · ${rec.galeria.length} cliente${rec.galeria.length === 1 ? "" : "s"} registrado${rec.galeria.length === 1 ? "" : "s"}`);
@@ -131,7 +140,6 @@ function aplicarPersona(p, auto) {
 async function tickReconocimiento(video, lm) {
   if (!rec.listo || rec.ocupado || estado.modo !== "camara" || estado.pausado) return;
   const ahora = Date.now();
-  rec.sinRostroDesde = 0;
 
   if (rec.registro) {
     const r = rec.registro;
@@ -174,10 +182,12 @@ function sinRostroReconocimiento() {
     rec.registro = null;
     aviso("Registro cancelado: no se detectó un rostro.", 4000);
   }
-  if (rec.persona && ahora - rec.sinRostroDesde > 4000) {
-    const vino = rec.auto;
+  // Cuando el cliente se retira, sus datos se borran solos de la pantalla, sin importar de dónde vinieron
+  if (rec.vistoDesdeCarga && ahora - rec.sinRostroDesde > MS_RETIRO) {
+    const hayDatos = datosActuales.nombre || datosActuales.habitacion || datosActuales.estadia;
     rec.persona = null;
-    if (vino) limpiarCliente("El cliente se retiró.");
+    rec.vistoDesdeCarga = false;
+    if (hayDatos) limpiarCliente("El cliente se retiró.");
   }
 }
 
@@ -371,6 +381,7 @@ function marcarLinea(emocion) {
 
 function procesarBlendshapes(bs, caja) {
   const ts = Date.now();
+  marcarPresencia();
 
   if (estado.calibrando) {
     estado.calibrando.muestras.push(bs);
@@ -442,12 +453,76 @@ async function abrirStream(deviceId) {
 }
 
 async function llenarCamaras(actualId) {
-  const sel = $("camara");
-  const dispositivos = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
-  if (dispositivos.length < 2) return;
-  sel.innerHTML = dispositivos.map((d, i) => `<option value="${d.deviceId}">${d.label || `Cámara ${i + 1}`}</option>`).join("");
-  if (actualId) sel.value = actualId;
-  sel.hidden = false;
+  let guardada = actualId;
+  if (!guardada) {
+    try {
+      guardada = localStorage.getItem("camaraId");
+    } catch {
+      guardada = null;
+    }
+  }
+  const sel = $("cfg-camara");
+  let dispositivos = [];
+  try {
+    dispositivos = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+  } catch {
+    /* sin acceso a la lista de dispositivos */
+  }
+  sel.replaceChildren();
+  if (!dispositivos.length) {
+    sel.append(new Option("No se detectaron cámaras", ""));
+    $("cfg-ayuda").textContent = "Conectá una cámara y apretá «Detectar cámaras».";
+    return;
+  }
+  dispositivos.forEach((d, i) => sel.append(new Option(d.label || `Cámara ${i + 1}`, d.deviceId)));
+  if (guardada && dispositivos.some((d) => d.deviceId === guardada)) sel.value = guardada;
+  const n = dispositivos.length;
+  $("cfg-ayuda").textContent = dispositivos.every((d) => !d.label)
+    ? "Para ver los nombres de las cámaras, apretá «Detectar cámaras» y permití el acceso."
+    : `${n} cámara${n === 1 ? "" : "s"} detectada${n === 1 ? "" : "s"}.`;
+}
+
+async function detectarCamaras() {
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    s.getTracks().forEach((t) => t.stop());
+  } catch {
+    aviso("No se pudo acceder a la cámara. Revisá el permiso del navegador.", 5000);
+  }
+  await llenarCamaras();
+}
+
+async function cambiarCamara(deviceId) {
+  if (!deviceId) return;
+  try {
+    localStorage.setItem("camaraId", deviceId);
+  } catch {
+    /* sin almacenamiento */
+  }
+  if (estado.modo === "camara" && !estado.pausado) {
+    detenerCamara();
+    try {
+      await iniciarCamara(deviceId);
+      canal?.postMessage({ tipo: "camara" });
+      aviso("Cámara cambiada.");
+    } catch (err) {
+      aviso(`No se pudo cambiar de cámara: ${err.message}`, 5000);
+    }
+  } else {
+    aviso("Cámara guardada. Se usará al iniciar.");
+  }
+}
+
+function abrirConfiguracion() {
+  $("cfg-sensibilidad").value = String(estado.neutralBias);
+  llenarCamaras();
+  $("dlg-config").showModal();
+}
+
+function volverAlInicio() {
+  olvidarSesion();
+  estado.store?.vaciar?.();
+  location.reload();
 }
 
 async function iniciarCamara(deviceId = localStorage.getItem("camaraId") || undefined) {
@@ -690,9 +765,66 @@ async function borrarDatos() {
 
 let relojIniciado = false;
 
+const CLAVE_SESION = "anima_sesion";
+
+function guardarSesion(modo) {
+  try {
+    localStorage.setItem(CLAVE_SESION, JSON.stringify({ modo }));
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+function olvidarSesion() {
+  try {
+    localStorage.removeItem(CLAVE_SESION);
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+// Al recargar la página se retoma el modo con el que se venía trabajando, sin pasar otra vez por el inicio.
+function reanudarSiCorresponde() {
+  let guardada = null;
+  try {
+    guardada = JSON.parse(localStorage.getItem(CLAVE_SESION) || "null");
+  } catch {
+    guardada = null;
+  }
+  if (guardada?.modo === "camara") arrancarConCamara();
+  else if (guardada?.modo === "demo") arrancarDemo();
+  else return false;
+  return true;
+}
+
+async function arrancarConCamara() {
+  const err = $("inicio-error");
+  err.hidden = true;
+  $("btn-camara").disabled = true;
+  try {
+    await entrar("camara");
+    await iniciarCamara();
+    guardarSesion("camara");
+  } catch (e) {
+    olvidarSesion();
+    $("app").hidden = true;
+    $("inicio").hidden = false;
+    $("btn-camara").disabled = !$("consent").checked;
+    detenerCamara();
+    err.textContent = e.name === "NotAllowedError" ? "El navegador no tiene permiso para usar la cámara. Habilitalo en la barra de direcciones y volvé a intentar." : `No se pudo iniciar: ${e.message}`;
+    err.hidden = false;
+  }
+}
+
+async function arrancarDemo() {
+  await entrar("demo");
+  iniciarDemo();
+  guardarSesion("demo");
+}
+
 async function iniciarAuth() {
   if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY) {
-    $("inicio").hidden = false;
+    if (!reanudarSiCorresponde()) $("inicio").hidden = false;
     return;
   }
   try {
@@ -707,7 +839,11 @@ async function iniciarAuth() {
     $("inicio-error").hidden = false;
     return;
   }
-  $(usuario ? "inicio" : "login").hidden = false;
+  if (usuario) {
+    if (!reanudarSiCorresponde()) $("inicio").hidden = false;
+  } else {
+    $("login").hidden = false;
+  }
 }
 
 async function ingresar(e) {
@@ -729,6 +865,7 @@ async function ingresar(e) {
 }
 
 async function salir() {
+  olvidarSesion();
   await estado.store?.vaciar?.();
   await cliente.auth.signOut();
   location.reload();
@@ -768,27 +905,8 @@ async function entrar(modo) {
 
 $("consent").addEventListener("change", (e) => ($("btn-camara").disabled = !e.target.checked));
 
-$("btn-camara").addEventListener("click", async () => {
-  const err = $("inicio-error");
-  err.hidden = true;
-  $("btn-camara").disabled = true;
-  try {
-    await entrar("camara");
-    await iniciarCamara();
-  } catch (e) {
-    $("app").hidden = true;
-    $("inicio").hidden = false;
-    $("btn-camara").disabled = !$("consent").checked;
-    detenerCamara();
-    err.textContent = e.name === "NotAllowedError" ? "El navegador no tiene permiso para usar la cámara. Habilitalo en la barra de direcciones y volvé a intentar." : `No se pudo iniciar: ${e.message}`;
-    err.hidden = false;
-  }
-});
-
-$("btn-demo").addEventListener("click", async () => {
-  await entrar("demo");
-  iniciarDemo();
-});
+$("btn-camara").addEventListener("click", arrancarConCamara);
+$("btn-demo").addEventListener("click", arrancarDemo);
 
 $("btn-pausa").addEventListener("click", pausarReanudar);
 $("btn-calibrar").addEventListener("click", calibrar);
@@ -807,13 +925,21 @@ $("form-pdf").addEventListener("submit", (e) => {
 });
 $("btn-borrar").addEventListener("click", borrarDatos);
 $("alerta-ok").addEventListener("click", () => ($("alerta").hidden = true));
-$("camara").addEventListener("change", async (e) => {
-  detenerCamara();
+$("btn-config").addEventListener("click", abrirConfiguracion);
+$("cfg-camara").addEventListener("change", (e) => cambiarCamara(e.target.value));
+$("cfg-detectar").addEventListener("click", detectarCamaras);
+$("cfg-inicio").addEventListener("click", volverAlInicio);
+$("cfg-sensibilidad").addEventListener("change", (e) => {
+  estado.neutralBias = Number(e.target.value);
   try {
-    await iniciarCamara(e.target.value);
-  } catch (err) {
-    aviso(`No se pudo cambiar de cámara: ${err.message}`, 5000);
+    localStorage.setItem("neutralBias", String(estado.neutralBias));
+  } catch {
+    /* sin almacenamiento */
   }
+  aviso("Sensibilidad actualizada.");
+});
+navigator.mediaDevices?.addEventListener?.("devicechange", () => {
+  if ($("dlg-config").open) llenarCamaras();
 });
 
 $("login-form").addEventListener("submit", ingresar);

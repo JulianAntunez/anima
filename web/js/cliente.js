@@ -95,6 +95,10 @@ canal.onmessage = ({ data }) => {
     st.demo = !!data.demo;
     actualizarEscena();
   }
+  if (data.tipo === "camara") {
+    cerrarCamara();
+    actualizarEscena();
+  }
   if (data.tipo === "lectura" && !st.ocultar) {
     st.ultimaLectura = Date.now();
     st.emocion = data.emocion || "ninguno";
