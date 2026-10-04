@@ -5,6 +5,9 @@ import { LocalStore, SupabaseStore, resumir, porHora, aCSV, dia } from "./store.
 import { construirInforme } from "./informe.js";
 import { CONFIG } from "./config.js";
 import { CANAL, datosCliente } from "./canal.js";
+import { cargarReconocedor, embeddingDe } from "./reconocimiento.js";
+import { buscar, promediar as promediarEmbeddings } from "./reconocer.js";
+import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas } from "./personas.js";
 
 const $ = (id) => document.getElementById(id);
 const canal = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(CANAL) : null;
@@ -71,18 +74,162 @@ function setEstado(texto, clase = "") {
 
 /* ---------- pantalla del cliente ---------- */
 
-function mostrarAlCliente(e) {
-  e.preventDefault();
+function publicarCliente() {
   datosActuales = datosCliente({ nombre: $("cli-in-nombre").value, habitacion: $("cli-in-hab").value, estadia: $("cli-in-estadia").value });
   canal?.postMessage(datosActuales);
   $("cli-estado").textContent = datosActuales.nombre ? `Mostrando a ${datosActuales.nombre} en la pantalla del cliente.` : "Pantalla del cliente sin nombre.";
 }
 
-function limpiarCliente() {
+function mostrarAlCliente(e) {
+  e.preventDefault();
+  publicarCliente();
+}
+
+function limpiarCliente(texto = "Datos del cliente borrados.") {
   for (const id of ["cli-in-nombre", "cli-in-hab", "cli-in-estadia"]) $(id).value = "";
   datosActuales = datosCliente();
   canal?.postMessage(datosActuales);
-  $("cli-estado").textContent = "Datos del cliente borrados.";
+  $("cli-estado").textContent = texto;
+}
+
+/* ---------- reconocimiento de clientes (vectores solo en este navegador) ---------- */
+
+const REG_MUESTRAS = 10;
+const rec = { listo: false, cargando: false, galeria: [], persona: null, auto: false, ocupado: false, ultimo: 0, sinRostroDesde: 0, registro: null };
+
+const textoRec = (t) => ($("rec-estado").textContent = t);
+const estadoRec = () => textoRec(`Reconocimiento activo · ${rec.galeria.length} cliente${rec.galeria.length === 1 ? "" : "s"} registrado${rec.galeria.length === 1 ? "" : "s"}`);
+
+async function recargarGaleria() {
+  rec.galeria = await cargarGaleria();
+}
+
+async function iniciarReconocimiento() {
+  if (rec.listo || rec.cargando) return;
+  rec.cargando = true;
+  textoRec("Reconocimiento: cargando modelo…");
+  try {
+    await recargarGaleria();
+    await cargarReconocedor();
+    rec.listo = true;
+    estadoRec();
+  } catch {
+    textoRec("Reconocimiento no disponible en este navegador.");
+  }
+  rec.cargando = false;
+}
+
+function aplicarPersona(p, auto) {
+  rec.persona = p;
+  rec.auto = auto;
+  $("cli-in-nombre").value = p.nombre;
+  $("cli-in-hab").value = p.habitacion || "";
+  $("cli-in-estadia").value = p.estadia || "";
+  publicarCliente();
+}
+
+async function tickReconocimiento(video, lm) {
+  if (!rec.listo || rec.ocupado || estado.modo !== "camara" || estado.pausado) return;
+  const ahora = Date.now();
+  rec.sinRostroDesde = 0;
+
+  if (rec.registro) {
+    const r = rec.registro;
+    if (ahora - r.ultimo < 350) return;
+    rec.ocupado = true;
+    try {
+      r.ultimo = ahora;
+      r.muestras.push(await embeddingDe(video, lm, video.videoWidth, video.videoHeight));
+      aviso(`Registrando… mirá a la cámara (${r.muestras.length}/${REG_MUESTRAS})`, 0);
+      if (r.muestras.length >= REG_MUESTRAS) await terminarRegistro();
+    } catch {
+      rec.registro = null;
+      aviso("No se pudo registrar al cliente.", 4000);
+    } finally {
+      rec.ocupado = false;
+    }
+    return;
+  }
+
+  if (rec.persona || !rec.galeria.length || ahora - rec.ultimo < 1000) return;
+  rec.ultimo = ahora;
+  rec.ocupado = true;
+  try {
+    const m = buscar(await embeddingDe(video, lm, video.videoWidth, video.videoHeight), rec.galeria);
+    if (m) {
+      aplicarPersona(m.persona, true);
+      aviso(`Reconocido: ${m.persona.nombre}`);
+    }
+  } catch {
+    /* un cuadro que falla se ignora */
+  } finally {
+    rec.ocupado = false;
+  }
+}
+
+function sinRostroReconocimiento() {
+  const ahora = Date.now();
+  if (!rec.sinRostroDesde) rec.sinRostroDesde = ahora;
+  if (rec.registro && ahora - rec.registro.inicio > 20000) {
+    rec.registro = null;
+    aviso("Registro cancelado: no se detectó un rostro.", 4000);
+  }
+  if (rec.persona && ahora - rec.sinRostroDesde > 4000) {
+    const vino = rec.auto;
+    rec.persona = null;
+    if (vino) limpiarCliente("El cliente se retiró.");
+  }
+}
+
+function iniciarRegistro() {
+  if (estado.modo !== "camara" || estado.pausado) return aviso("Iniciá la cámara para registrar a un cliente.");
+  if (!rec.listo) return aviso("El reconocimiento todavía se está cargando.");
+  if (!$("cli-in-nombre").value.trim()) return aviso("Escribí el nombre del cliente.");
+  if (!$("cli-consent").checked) return aviso("Hace falta el consentimiento del cliente.");
+  rec.registro = { muestras: [], ultimo: 0, inicio: Date.now() };
+  aviso("Registrando… mirá a la cámara", 0);
+}
+
+async function terminarRegistro() {
+  const { muestras } = rec.registro;
+  rec.registro = null;
+  const datos = { nombre: $("cli-in-nombre").value.trim(), habitacion: $("cli-in-hab").value.trim(), estadia: $("cli-in-estadia").value.trim() };
+  const embedding = promediarEmbeddings(muestras);
+  const parecido = buscar(embedding, rec.galeria);
+  if (parecido && parecido.persona.nombre.toLowerCase() !== datos.nombre.toLowerCase()) {
+    aviso(`Esa persona ya está registrada como ${parecido.persona.nombre}.`, 5000);
+    return;
+  }
+  const existente = rec.galeria.find((p) => p.nombre.toLowerCase() === datos.nombre.toLowerCase());
+  if (existente) await actualizarPersona({ ...existente, ...datos, embedding });
+  else await agregarPersona({ ...datos, embedding });
+  await recargarGaleria();
+  rec.persona = rec.galeria.find((p) => p.nombre.toLowerCase() === datos.nombre.toLowerCase()) || null;
+  rec.auto = false;
+  estadoRec();
+  publicarCliente();
+  aviso(`Cliente registrado: ${datos.nombre}`, 4000);
+}
+
+async function olvidarCliente() {
+  if (!rec.persona) return aviso("No hay un cliente reconocido en este momento.");
+  const nombre = rec.persona.nombre;
+  await eliminarPersona(rec.persona.id);
+  rec.persona = null;
+  await recargarGaleria();
+  estadoRec();
+  limpiarCliente(`Se borró el registro de ${nombre}.`);
+  aviso(`Registro de ${nombre} eliminado.`);
+}
+
+async function borrarRegistrados() {
+  if (!rec.galeria.length) return aviso("No hay clientes registrados.");
+  if (!confirm("¿Borrar a todos los clientes registrados en este navegador? No se puede deshacer.")) return;
+  await borrarPersonas();
+  rec.persona = null;
+  await recargarGaleria();
+  estadoRec();
+  limpiarCliente("Se borraron todos los registros.");
 }
 
 if (canal) {
@@ -245,6 +392,7 @@ function procesarBlendshapes(bs, caja) {
 
 function sinRostro() {
   const ts = Date.now();
+  sinRostroReconocimiento();
   estado.historial = [];
   marcarLinea("ninguno");
   renderFoco(null, null);
@@ -335,6 +483,7 @@ async function iniciarCamara(deviceId = localStorage.getItem("camaraId") || unde
   $("placeholder").hidden = true;
   estado.ultimoVideoTime = -1;
   setEstado("Cámara activa");
+  iniciarReconocimiento();
   bucleCamara();
 }
 
@@ -375,6 +524,7 @@ function bucleCamara() {
       if (p.y > ymax) ymax = p.y;
     }
     // el video se muestra en espejo: se invierte la X
+    tickReconocimiento(video, lm);
     procesarBlendshapes(bs, { x: 1 - xmax, y: ymin, w: xmax - xmin, h: ymax - ymin });
   };
   estado.rafId = requestAnimationFrame(paso);
@@ -445,6 +595,7 @@ function iniciarDemo() {
   $("placeholder-texto").textContent = "Modo demo: datos simulados";
   $("escenario").style.aspectRatio = "4 / 3";
   setEstado("Modo demo", "demo");
+  textoRec("Reconocimiento: disponible solo con la cámara real.");
   const t0 = Date.now();
   estado.demoTimer = setInterval(() => {
     const t = ((Date.now() - t0) / 1000) % DURACION_DEMO;
@@ -643,7 +794,10 @@ $("btn-pausa").addEventListener("click", pausarReanudar);
 $("btn-calibrar").addEventListener("click", calibrar);
 $("btn-csv").addEventListener("click", descargarCSV);
 $("form-cliente").addEventListener("submit", mostrarAlCliente);
-$("btn-limpiar-cliente").addEventListener("click", limpiarCliente);
+$("btn-limpiar-cliente").addEventListener("click", () => limpiarCliente());
+$("btn-registrar-cliente").addEventListener("click", iniciarRegistro);
+$("btn-olvidar-cliente").addEventListener("click", olvidarCliente);
+$("btn-borrar-registrados").addEventListener("click", borrarRegistrados);
 $("btn-abrir-cliente").addEventListener("click", () => {
   window.open("cliente.html", "anima-cliente", "popup,width=1100,height=760");
 });

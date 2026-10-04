@@ -126,6 +126,19 @@
             <button type="button" id="btn-limpiar-cliente"><i class="ti ti-eraser" aria-hidden="true"></i>Limpiar</button>
           </div>
           <p id="cli-estado" class="estado-cli" role="status"></p>
+
+          <div class="reconocimiento">
+            <label class="consent consent-chico">
+              <input type="checkbox" id="cli-consent">
+              <span>El cliente acepta que se guarde su vector facial en este equipo (sin fotos).</span>
+            </label>
+            <div class="botones">
+              <button type="button" id="btn-registrar-cliente"><i class="ti ti-user-plus" aria-hidden="true"></i>Registrar cliente</button>
+              <button type="button" id="btn-olvidar-cliente"><i class="ti ti-user-minus" aria-hidden="true"></i>Olvidar</button>
+              <button type="button" id="btn-borrar-registrados" class="peligro" title="Borrar todos los clientes registrados"><i class="ti ti-trash" aria-hidden="true"></i></button>
+            </div>
+            <p id="rec-estado" class="estado-cli" role="status">Reconocimiento: se activa al iniciar la cámara.</p>
+          </div>
         </form>
       </section>
       <section class="card">
