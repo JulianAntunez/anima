@@ -28,7 +28,8 @@ class AppConfig:
     smoothing_window: int = 4  # Frames promediados por rostro; menor = más reactivo, mayor = más estable
 
     # Optimización de rendimiento (inferencia cada N frames)
-    classify_every_n_frames: int = 3
+    # 1 = clasificar todos los cuadros (máxima reactividad). Valores mayores reducen CPU reutilizando el último resultado
+    classify_every_n_frames: int = 1
 
     # Rutas de almacenamiento
     project_root: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent)

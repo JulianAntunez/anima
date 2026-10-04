@@ -61,8 +61,14 @@ class TrackedFace:
         self.history_probs: deque = deque(maxlen=window_size)
         self.last_result: Optional[EmotionResult] = None
 
-    def update(self, box: Tuple[int, int, int, int], raw_result: EmotionResult) -> EmotionResult:
+    def update(
+        self,
+        box: Tuple[int, int, int, int],
+        raw_result: EmotionResult,
+        threshold: Optional[float] = None,
+    ) -> EmotionResult:
         """Actualiza la posición del rostro y aplica suavizado temporal a las probabilidades."""
+        umbral = DEFAULT_CONFIG.emotion_confidence_threshold if threshold is None else threshold
         self.box = box
         self.frames_lost = 0
 
@@ -87,15 +93,8 @@ class TrackedFace:
         winner_label = max(smoothed_probs.items(), key=lambda item: item[1])[0]
         winner_confidence = smoothed_probs[winner_label]
 
-        # Mantener umbral de certeza del clasificador
-        min_conf = (
-            raw_result.confidence
-            if raw_result.emotion != "incierto"
-            else DEFAULT_CONFIG.emotion_confidence_threshold
-        )
-        assigned_emotion = (
-            winner_label if winner_confidence >= DEFAULT_CONFIG.emotion_confidence_threshold else "incierto"
-        )
+        # Umbral de certeza vigente (el operador puede cambiarlo en vivo con la tecla T)
+        assigned_emotion = winner_label if winner_confidence >= umbral else "incierto"
 
         smoothed_res = EmotionResult(
             emotion=assigned_emotion,
@@ -118,8 +117,10 @@ class FaceTracker:
         iou_threshold: float = 0.25,
         max_centroid_dist: float = 120.0,
         window_size: int = 7,
+        threshold: Optional[float] = None,
     ) -> None:
         """
+        :param threshold: Umbral de certeza para etiquetar una emoción; por debajo es "incierto".
         :param max_lost: Frames consecutivos sin detectar el rostro antes de descartar el ID.
         :param iou_threshold: Umbral mínimo de solapamiento IoU para considerar coincidencia.
         :param max_centroid_dist: Distancia máxima en píxeles permitida si el IoU es bajo.
@@ -129,6 +130,7 @@ class FaceTracker:
         self.iou_threshold = iou_threshold
         self.max_centroid_dist = max_centroid_dist
         self.window_size = window_size
+        self.threshold = DEFAULT_CONFIG.emotion_confidence_threshold if threshold is None else float(threshold)
 
         self.next_track_id: int = 1
         self.tracks: Dict[int, TrackedFace] = {}
@@ -189,7 +191,7 @@ class FaceTracker:
             det = detections[d_idx]
             raw_res = raw_results[d_idx]
             tracked_face = self.tracks[tid]
-            smoothed_res = tracked_face.update(det.box, raw_res)
+            smoothed_res = tracked_face.update(det.box, raw_res, self.threshold)
             resultados_finales.append((tid, det, smoothed_res))
 
         # 2. Registrar nuevos rostros (sin emparejar)
@@ -202,7 +204,7 @@ class FaceTracker:
                     box=det.box,
                     window_size=self.window_size,
                 )
-                smoothed_res = nuevo_track.update(det.box, raw_results[d_idx])
+                smoothed_res = nuevo_track.update(det.box, raw_results[d_idx], self.threshold)
                 self.tracks[nuevo_tid] = nuevo_track
                 resultados_finales.append((nuevo_tid, det, smoothed_res))
 
@@ -223,3 +225,31 @@ class FaceTracker:
         """Reinicia el estado del tracker."""
         self.tracks.clear()
         self.next_track_id = 1
+
+
+def reutilizar_resultados(
+    detecciones: List[FaceDetection],
+    previos: List[Tuple[Tuple[int, int, int, int], EmotionResult]],
+    iou_minimo: float = 0.3,
+) -> List[Optional[EmotionResult]]:
+    """
+    Para cada detección devuelve el resultado crudo del cuadro anterior cuyo recuadro más se le superpone
+    (IoU >= iou_minimo), o None si no hay uno reutilizable y hay que clasificar de nuevo.
+    Permite clasificar solo cada N cuadros (classify_every_n_frames) sin perder el seguimiento.
+    """
+    resultado: List[Optional[EmotionResult]] = []
+    usados = set()
+    for det in detecciones:
+        mejor_idx, mejor_iou = None, iou_minimo
+        for idx, (box, _) in enumerate(previos):
+            if idx in usados:
+                continue
+            iou = calcular_iou(det.box, box)
+            if iou >= mejor_iou:
+                mejor_idx, mejor_iou = idx, iou
+        if mejor_idx is None:
+            resultado.append(None)
+        else:
+            usados.add(mejor_idx)
+            resultado.append(previos[mejor_idx][1])
+    return resultado

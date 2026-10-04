@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 from config import DEFAULT_CONFIG, AppConfig
-from core import BlendshapeEmotionClassifier, EnsembleEmotionClassifier, FaceDetector, EmotionClassifier, EmotionResult, FaceDetection, FaceRecognizer, FaceTracker, Match
+from core import BlendshapeEmotionClassifier, EnsembleEmotionClassifier, FaceDetector, EmotionClassifier, EmotionResult, FaceDetection, FaceRecognizer, FaceTracker, Match, reutilizar_resultados
 from utils import EmotionCSVLogger, EmotionDBLogger, PersonasRepository
 
 # Paleta armónica de colores BGR según la emoción
@@ -57,8 +57,9 @@ class OpenCVApp:
             print("[AVISO] Falta el modelo FaceLandmarker; se usa FER+ (menos sensible).")
             print("        Para activarlo: python -m utils.download_model --landmarker")
             self.classifier = EmotionClassifier(min_confidence=self.threshold)
+        self._previos: List[Tuple[Tuple[int, int, int, int], EmotionResult]] = []
         self._calibracion: Optional[Dict] = None  # Estado de la calibración de cara neutra
-        self.tracker = FaceTracker(window_size=self.config.smoothing_window)
+        self.tracker = FaceTracker(window_size=self.config.smoothing_window, threshold=self.threshold)
         self.enable_smoothing: bool = True
 
         # Reconocimiento de identidad (opcional: requiere el modelo ArcFace descargado)
@@ -558,8 +559,16 @@ class OpenCVApp:
                 # 2. Clasificación cruda
                 raw_results: List[EmotionResult] = []
                 dets_validas: List[FaceDetection] = []
-                for det in detecciones:
-                    if hasattr(self.classifier, "predict_face"):
+                # Solo se clasifica cada N cuadros; en los demás se reutiliza el resultado del rostro seguido
+                cada_n = max(1, self.config.classify_every_n_frames)
+                if cada_n > 1 and frame_count % cada_n != 0:
+                    reutilizados = reutilizar_resultados(detecciones, self._previos)
+                else:
+                    reutilizados = [None] * len(detecciones)
+                for det, reutilizado in zip(detecciones, reutilizados):
+                    if reutilizado is not None:
+                        em_res = reutilizado
+                    elif hasattr(self.classifier, "predict_face"):
                         em_res = self.classifier.predict_face(frame, det.box)
                     else:
                         crop = FaceDetector.crop_face(
@@ -569,6 +578,7 @@ class OpenCVApp:
                     if em_res:
                         raw_results.append(em_res)
                         dets_validas.append(det)
+                self._previos = [(d.box, r) for d, r in zip(dets_validas, raw_results)]
 
                 # 3. Seguimiento multirrostro y suavizado temporal
                 if self.enable_smoothing:
@@ -634,6 +644,7 @@ class OpenCVApp:
                     self._current_thresh_idx = (self._current_thresh_idx + 1) % len(self._threshold_levels)
                     nuevo_umbral = self._threshold_levels[self._current_thresh_idx]
                     self.classifier.min_confidence = nuevo_umbral
+                    self.tracker.threshold = nuevo_umbral
                     self._set_notification(f"Umbral ajustado a: {nuevo_umbral * 100:.0f}%")
                 elif tecla in (ord("k"), ord("K")):
                     self._iniciar_calibracion()

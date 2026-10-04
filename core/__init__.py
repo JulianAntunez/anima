@@ -6,7 +6,7 @@ from .detector import FaceDetector, FaceDetection
 from .classifier import EmotionClassifier, EmotionResult
 from .expression import BlendshapeEmotionClassifier, EnsembleEmotionClassifier
 from .recognizer import FaceRecognizer, Match
-from .tracker import FaceTracker, TrackedFace, calcular_iou
+from .tracker import FaceTracker, TrackedFace, calcular_iou, reutilizar_resultados
 
 __all__ = [
     "FaceDetector",
@@ -20,4 +20,5 @@ __all__ = [
     "FaceTracker",
     "TrackedFace",
     "calcular_iou",
+    "reutilizar_resultados",
 ]
