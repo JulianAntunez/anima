@@ -1,4 +1,4 @@
-# DOCUMENTACIÓN TÉCNICA Y ACADÉMICA DEL PROYECTO
+# ÁNIMA — DOCUMENTACIÓN TÉCNICA Y ACADÉMICA DEL PROYECTO
 
 ## Sistema de Visión Artificial para Detección Facial, Clasificación de Expresiones Emocionales y Telemetría en Tiempo Real
 
@@ -6,6 +6,7 @@
 
 ### Ficha Técnica del Proyecto
 
+- **Nombre**: Ánima — *Hospitalidad que se anticipa*
 - **Autor / Desarrollador**: Julián Antúnez
 - **Entorno Operativo**: Windows 11 (Arquitectura AMD64)
 - **Lenguaje y Versión**: Python 3.12.10 (Entorno virtual `venv`)

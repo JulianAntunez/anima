@@ -1,4 +1,6 @@
-# Sistema de Detección de Rostros y Clasificación de Emociones en Tiempo Real 🎭
+# Ánima — Hospitalidad que se anticipa 🎭
+
+*El pulso de tu recepción.* Sistema de detección de rostros, clasificación de expresiones y reconocimiento opcional de huéspedes en tiempo real, con una web (carpeta `web/`) conectada a Supabase.
 
 Aplicación modular de visión por computadora y aprendizaje profundo optimizada para ejecutarse en tiempo real sobre **CPU estándar** en Windows 11. Integra **MediaPipe BlazeFace** para detección facial ultrarrápida, una red neuronal profunda **FER+ en ONNX Runtime** para clasificar 7 emociones humanas, telemetría continua en **CSV (ISO 8601)**, seguimiento multirrostro con suavizado temporal, una interfaz gráfica de escritorio en **OpenCV** y un dashboard interactivo en **Streamlit**.
 
@@ -58,8 +60,9 @@ Aplicación modular de visión por computadora y aprendizaje profundo optimizada
 ## 📂 Estructura del Proyecto
 
 ```text
-Reconocimiento_De_Rostros/
+Anima/
 │
+├── web/                        # Ánima Web: panel de recepción (HTML/JS + Supabase)
 ├── config/
 │   ├── __init__.py
 │   └── config.py               # Configuración centralizada e inmutable (dataclass)
@@ -121,7 +124,7 @@ Pruebas reales medidas en **Windows 11 (AMD64 / CPU común)** procesando más de
 ### 1. Clonar el repositorio
 ```bash
 git clone https://github.com/JulianAntunez/Reconocimiento_De_Rostros.git
-cd Reconocimiento_De_Rostros
+cd Reconocimiento_De_Rostros   # nombre actual del repositorio en GitHub
 ```
 
 ### 2. Crear y activar el entorno virtual
@@ -179,7 +182,29 @@ Ejecuta el punto de entrada principal para transmisión fluida desde tu webcam a
 
 ---
 
-### 2. Dashboard Web Interactivo (Streamlit)
+### 2. Base de Datos y Reconocimiento de Personas
+Cada sesión guarda las emociones en SQLite (`data/emociones.db`) con muestreo: un registro por rostro cuando cambia la emoción o cada 5 s, no por frame. Tablas: `sesiones`, `registro_emociones` y `personas`.
+
+Opcionalmente el sistema puede reconocer a las personas registradas y mostrar su nombre en pantalla. Usa un modelo ArcFace (ONNX) que convierte el rostro en un vector de 512 números; **solo se guarda ese vector y el nombre, nunca fotos**.
+
+```powershell
+# Descargar el modelo de reconocimiento una sola vez (~122 MB de descarga, queda un archivo de ~13 MB)
+.\venv\Scripts\python.exe -m utils.download_model --reconocimiento
+
+# Registrar a alguien: durante la ejecución presionar R, escribir el nombre, confirmar consentimiento (S) y mirar a la cámara
+.\venv\Scripts\python.exe main.py
+
+# Listar / eliminar personas (la baja borra el vector y desvincula su historial)
+.\venv\Scripts\python.exe main.py --listar-personas
+.\venv\Scripts\python.exe main.py --eliminar-persona 1
+```
+Flags útiles: `--no-db` (sin base de datos) y `--no-reconocer` (sin identificación).
+
+> Un embedding facial es un **dato biométrico sensible** (Ley 25.326): requiere consentimiento explícito. El registro exige confirmarlo y se guarda su fecha.
+
+---
+
+### 3. Dashboard Web Interactivo (Streamlit)
 Para abrir la interfaz web con análisis de imágenes y gráficos de auditoría histórica:
 ```powershell
 .\venv\Scripts\python.exe main.py --web
@@ -192,7 +217,7 @@ El dashboard se abrirá automáticamente en tu navegador (`http://localhost:8501
 
 ---
 
-### 3. Suite de Pruebas Unitarias (pytest)
+### 4. Suite de Pruebas Unitarias (pytest)
 Para ejecutar la suite completa de 23 pruebas:
 ```powershell
 .\venv\Scripts\pytest

@@ -39,7 +39,7 @@ EMOTION_COLORS_HEX: Dict[str, str] = {
 
 # Configuración general de la página Streamlit
 st.set_page_config(
-    page_title="Reconocimiento Facial y Emociones | AI Dashboard",
+    page_title="Ánima | Panel de análisis",
     page_icon="🎭",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -346,7 +346,7 @@ def main():
     detector, classifier = cargar_modelos(min_confidence=umbral_detector)
 
     # Encabezado principal
-    st.title("🎭 Plataforma de Reconocimiento y Clasificación de Emociones")
+    st.title("🎭 Ánima · Reconocimiento y clasificación de expresiones")
     st.markdown(
         "Inferencia de alto rendimiento en CPU combinando detección ultrarrápida con MediaPipe y red neuronal profunda FER+ en ONNX Runtime."
     )

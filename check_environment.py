@@ -145,7 +145,7 @@ def verificar_camara(indice_camara: int = 0) -> bool:
 
 def main() -> None:
     print(f"{BOLD}===================================================={RESET}")
-    print(f"{BOLD}   DIAGNÓSTICO DEL ENTORNO - RECONOCIMIENTO FACIAL  {RESET}")
+    print(f"{BOLD}   DIAGNÓSTICO DEL ENTORNO - ÁNIMA                  {RESET}")
     print(f"{BOLD}===================================================={RESET}")
 
     sys_ok = verificar_sistema()
