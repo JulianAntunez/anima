@@ -85,6 +85,10 @@ function publicarCliente() {
 function mostrarAlCliente(e) {
   e.preventDefault();
   publicarCliente();
+  const nombre = datosActuales.nombre.toLowerCase();
+  if (nombre && rec.listo && !rec.galeria.some((p) => p.nombre.toLowerCase() === nombre)) {
+    $("cli-estado").textContent += " Para que lo reconozca solo la próxima vez, tildá el consentimiento y apretá «Registrar cliente».";
+  }
 }
 
 function limpiarCliente(texto = "Datos del cliente borrados.") {
@@ -107,7 +111,11 @@ function marcarPresencia() {
 }
 
 const textoRec = (t) => ($("rec-estado").textContent = t);
-const estadoRec = () => textoRec(`Reconocimiento activo · ${rec.galeria.length} cliente${rec.galeria.length === 1 ? "" : "s"} registrado${rec.galeria.length === 1 ? "" : "s"}`);
+const estadoRec = () => {
+  const n = rec.galeria.length;
+  const nombres = rec.galeria.slice(0, 3).map((p) => p.nombre).join(", ") + (n > 3 ? "…" : "");
+  textoRec(`Reconocimiento activo · ${n} cliente${n === 1 ? "" : "s"} registrado${n === 1 ? "" : "s"}${n ? `: ${nombres}` : ""}`);
+};
 
 async function recargarGaleria() {
   rec.galeria = await cargarGaleria();
@@ -191,11 +199,17 @@ function sinRostroReconocimiento() {
   }
 }
 
+function avisarRegistro(texto) {
+  $("cli-estado").textContent = texto;
+  aviso(texto, 4000);
+}
+
 function iniciarRegistro() {
-  if (estado.modo !== "camara" || estado.pausado) return aviso("Iniciá la cámara para registrar a un cliente.");
-  if (!rec.listo) return aviso("El reconocimiento todavía se está cargando.");
-  if (!$("cli-in-nombre").value.trim()) return aviso("Escribí el nombre del cliente.");
-  if (!$("cli-consent").checked) return aviso("Hace falta el consentimiento del cliente.");
+  if (estado.modo !== "camara" || estado.pausado) return avisarRegistro("Iniciá la cámara para registrar a un cliente.");
+  if (!rec.listo) return avisarRegistro("El reconocimiento todavía se está cargando. Esperá unos segundos.");
+  if (!$("cli-in-nombre").value.trim()) return avisarRegistro("Escribí el nombre del cliente antes de registrarlo.");
+  if (!$("cli-consent").checked) return avisarRegistro("Tildá la casilla de consentimiento del cliente para poder registrarlo.");
+  $("cli-estado").textContent = "Registrando… pedile al cliente que mire a la cámara.";
   rec.registro = { muestras: [], ultimo: 0, inicio: Date.now() };
   aviso("Registrando… mirá a la cámara", 0);
 }
