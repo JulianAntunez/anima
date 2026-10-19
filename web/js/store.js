@@ -65,6 +65,11 @@ export class LocalStore {
     return todo;
   }
 
+  // En modo local las fichas de los huéspedes ya están en el navegador (IndexedDB); no hay nube a la cual enviarlas.
+  async guardarHuespedes() {}
+
+  async quitarHuespedes() {}
+
   async borrarTodo() {
     const claves = [];
     for (let i = 0; i < this.storage.length; i++) {
@@ -81,9 +86,36 @@ export class SupabaseStore {
     this.client = client;
     this.intervaloMs = intervaloMs;
     this.nombre = "Supabase (nube)";
-    this.cola = { registros: [], episodios: [] };
+    this.cola = { huespedes: [], borrados: [], registros: [], episodios: [] };
     this.timer = null;
     this.onError = null;
+  }
+
+  // Fichas de huéspedes: { uid, nombre, habitacion, estadia, consentimiento_ts }. Sin vector facial.
+  async guardarHuespedes(lista) {
+    for (const h of lista) {
+      this.cola.borrados = this.cola.borrados.filter((id) => id !== h.uid);
+      this.cola.huespedes = this.cola.huespedes.filter((x) => x.id !== h.uid);
+      this.cola.huespedes.push({
+        id: h.uid,
+        nombre: h.nombre,
+        habitacion: h.habitacion || "",
+        estadia: h.estadia || "",
+        consentimiento_ts: h.consentimiento_ts || new Date().toISOString(),
+      });
+    }
+    if (lista.length) this._programar();
+  }
+
+  // Al olvidar a un huésped también se desvincula de las atenciones que aún no se enviaron.
+  async quitarHuespedes(uids) {
+    const set = new Set(uids);
+    this.cola.huespedes = this.cola.huespedes.filter((h) => !set.has(h.id));
+    this.cola.episodios.forEach((e) => {
+      if (set.has(e.huesped_id)) e.huesped_id = null;
+    });
+    this.cola.borrados.push(...uids.filter((id) => !this.cola.borrados.includes(id)));
+    if (uids.length) this._programar();
   }
 
   async agregarRegistro(reg) {
@@ -99,6 +131,7 @@ export class SupabaseStore {
       duracion_ms: Math.round(ep.duracion),
       dominante: ep.dominante,
       alerta: !!ep.alerta,
+      huesped_id: ep.huesped ?? null,
     });
     this._programar();
   }
@@ -107,26 +140,66 @@ export class SupabaseStore {
     if (!this.timer) this.timer = setTimeout(() => this.vaciar(), this.intervaloMs);
   }
 
+  // Envía lo pendiente en orden: huéspedes, borrados, registros y atenciones (las atenciones apuntan a un huésped).
+  // Cada tramo que se envía bien sale de la cola; solo se reintenta lo que falló, así nada se duplica.
   async vaciar() {
     clearTimeout(this.timer);
     this.timer = null;
-    const registros = this.cola.registros.splice(0);
-    const episodios = this.cola.episodios.splice(0);
+    const pendiente = {
+      huespedes: this.cola.huespedes.splice(0),
+      borrados: this.cola.borrados.splice(0),
+      registros: this.cola.registros.splice(0),
+      episodios: this.cola.episodios.splice(0),
+    };
+    const devolver = () => {
+      for (const k of Object.keys(pendiente)) this.cola[k].unshift(...pendiente[k]);
+    };
     try {
-      if (registros.length) {
-        const { error } = await this.client.from("registros").insert(registros);
-        if (error) throw error;
+      if (this.sinHuespedes) {
+        pendiente.huespedes = [];
+        pendiente.borrados = [];
       }
-      if (episodios.length) {
-        const { error } = await this.client.from("episodios").insert(episodios);
+      if (pendiente.huespedes.length) {
+        const { error } = await this.client.from("huespedes").upsert(pendiente.huespedes, { onConflict: "id" });
+        if (error && !this._esquemaViejo(error)) throw error;
+        if (error) pendiente.borrados = [];
+        pendiente.huespedes = [];
+      }
+      if (pendiente.borrados.length) {
+        const { error } = await this.client.from("huespedes").delete().in("id", pendiente.borrados);
+        if (error && !this._esquemaViejo(error)) throw error;
+        pendiente.borrados = [];
+      }
+      if (pendiente.registros.length) {
+        const { error } = await this.client.from("registros").insert(pendiente.registros);
         if (error) throw error;
+        pendiente.registros = [];
+      }
+      if (pendiente.episodios.length) {
+        const filas = this.sinHuespedes ? pendiente.episodios.map(({ huesped_id, ...resto }) => resto) : pendiente.episodios;
+        let { error } = await this.client.from("episodios").insert(filas);
+        if (error && !this.sinHuespedes && this._esquemaViejo(error)) {
+          ({ error } = await this.client.from("episodios").insert(pendiente.episodios.map(({ huesped_id, ...resto }) => resto)));
+        }
+        if (error) throw error;
+        pendiente.episodios = [];
       }
     } catch (err) {
-      this.cola.registros.unshift(...registros);
-      this.cola.episodios.unshift(...episodios);
+      devolver();
       this.onError?.(err);
       this._programar();
     }
+  }
+
+  // Si todavía no se ejecutó huespedes.sql en Supabase, se sigue guardando lo anónimo y se avisa una sola vez.
+  _esquemaViejo(error) {
+    const texto = `${error?.message || ""} ${error?.details || ""}`;
+    const falta = /huesped/i.test(texto) && (["PGRST204", "PGRST205", "42P01", "42703"].includes(error?.code) || /column|table|schema cache|does not exist/i.test(texto));
+    if (falta && !this.sinHuespedes) {
+      this.sinHuespedes = true;
+      this.onEsquemaViejo?.();
+    }
+    return falta;
   }
 
   async cargarDia(fecha = dia(Date.now())) {
@@ -141,15 +214,20 @@ export class SupabaseStore {
   }
 
   async _consultar(desde, hasta) {
-    const [r, e] = await Promise.all([
+    const episodios = (columnas) =>
+      this.client.from("episodios").select(columnas).gte("inicio", desde.toISOString()).lt("inicio", hasta.toISOString()).order("inicio").range(0, 9999);
+    const base = "ref,inicio,fin,duracion_ms,dominante,alerta";
+    const [r, e0] = await Promise.all([
       this.client.from("registros").select("ts,emocion,confianza,episodio").gte("ts", desde.toISOString()).lt("ts", hasta.toISOString()).order("ts").range(0, 9999),
-      this.client.from("episodios").select("ref,inicio,fin,duracion_ms,dominante,alerta").gte("inicio", desde.toISOString()).lt("inicio", hasta.toISOString()).order("inicio").range(0, 9999),
+      episodios(this.sinHuespedes ? base : `${base},huesped_id`),
     ]);
+    let e = e0;
+    if (e.error && !this.sinHuespedes && this._esquemaViejo(e.error)) e = await episodios(base);
     if (r.error) throw r.error;
     if (e.error) throw e.error;
     return {
       registros: r.data.map((x) => ({ ts: Date.parse(x.ts), emocion: x.emocion, confianza: x.confianza, episodio: x.episodio })),
-      episodios: e.data.map((x) => ({ id: x.ref, inicio: Date.parse(x.inicio), fin: Date.parse(x.fin), duracion: x.duracion_ms, dominante: x.dominante, alerta: x.alerta })),
+      episodios: e.data.map((x) => ({ id: x.ref, inicio: Date.parse(x.inicio), fin: Date.parse(x.fin), duracion: x.duracion_ms, dominante: x.dominante, alerta: x.alerta, huesped: x.huesped_id ?? null })),
     };
   }
 

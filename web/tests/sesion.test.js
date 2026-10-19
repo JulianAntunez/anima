@@ -53,6 +53,19 @@ test("un gesto breve de enojo no dispara alerta", () => {
   assert.equal(s.procesar(9000, null).cerrado.alerta, false);
 });
 
+test("la atención guarda al huésped reconocido más veces", () => {
+  const s = new Sesion();
+  const l = (huesped) => ({ emocion: "neutral", confianza: 0.8, huesped });
+  for (let t = 0; t <= 4000; t += 500) s.procesar(t, l(t < 1000 ? "u2" : "u1"));
+  assert.equal(s.procesar(10000, null).cerrado.huesped, "u1");
+});
+
+test("sin reconocer a nadie la atención queda sin huésped", () => {
+  const s = new Sesion();
+  for (let t = 0; t <= 4000; t += 500) s.procesar(t, lectura("neutral"));
+  assert.equal(s.procesar(10000, null).cerrado.huesped, null);
+});
+
 class MemStorage {
   constructor() {
     this.m = new Map();

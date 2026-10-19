@@ -8,7 +8,7 @@ import { CANAL, datosCliente } from "./canal.js";
 import { cargarReconocedor, embeddingDe } from "./reconocimiento.js";
 import { buscar, promediar as promediarEmbeddings, decidirIdentidad } from "./reconocer.js";
 import { asociarCaras, principalDe } from "./seguimiento.js";
-import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas } from "./personas.js";
+import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas, fichaHuesped } from "./personas.js";
 
 const $ = (id) => document.getElementById(id);
 const canal = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(CANAL) : null;
@@ -127,6 +127,27 @@ const estadoRec = () => {
 async function recargarGaleria() {
   rec.galeria = await cargarGaleria();
 }
+
+// Las fichas (nombre, habitación, estadía) se copian a la base para poder consultarlas; el vector facial nunca sale del navegador.
+async function enviarFichas(personas) {
+  try {
+    await estado.store?.guardarHuespedes(personas.map(fichaHuesped));
+  } catch {
+    /* se reintenta en la próxima sincronización */
+  }
+}
+
+async function quitarFichas(personas) {
+  try {
+    await estado.store?.quitarHuespedes(personas.map((p) => p.uid).filter(Boolean));
+  } catch {
+    /* se reintenta en la próxima sincronización */
+  }
+}
+
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+const nombreDeHuesped = (uid) => (uid ? rec.galeria.find((p) => p.uid === uid)?.nombre || "" : "");
 
 async function iniciarReconocimiento() {
   if (rec.listo || rec.cargando) return;
@@ -262,6 +283,7 @@ async function terminarRegistro() {
   else await agregarPersona({ ...datos, embedding });
   await recargarGaleria();
   rec.persona = rec.galeria.find((p) => p.nombre.toLowerCase() === datos.nombre.toLowerCase()) || null;
+  if (rec.persona) enviarFichas([rec.persona]);
   rec.auto = false;
   const principal = principalDe(estado.caras);
   if (principal) {
@@ -277,6 +299,7 @@ async function olvidarCliente() {
   if (!rec.persona) return aviso("No hay un cliente reconocido en este momento.");
   const nombre = rec.persona.nombre;
   const idBorrado = rec.persona.id;
+  await quitarFichas([rec.persona]);
   await eliminarPersona(idBorrado);
   estado.caras.forEach((c) => {
     if (c.persona?.id === idBorrado) c.persona = null;
@@ -291,6 +314,7 @@ async function olvidarCliente() {
 async function borrarRegistrados() {
   if (!rec.galeria.length) return aviso("No hay clientes registrados.");
   if (!confirm("¿Borrar a todos los clientes registrados en este navegador? No se puede deshacer.")) return;
+  await quitarFichas(rec.galeria);
   await borrarPersonas();
   estado.caras.forEach((c) => (c.persona = null));
   rec.persona = null;
@@ -375,7 +399,8 @@ function renderResumen() {
     ? ultimos
         .map((e) => {
           const a = animoDe(e.dominante);
-          return `<li><span class="hora">${hhmm(e.inicio)}</span><span class="dur">${mmss(e.duracion)}${e.alerta ? " · con alerta" : ""}</span><span class="tag tono-${a.tono}">${a.nombre}</span></li>`;
+          const quien = nombreDeHuesped(e.huesped);
+          return `<li><span class="hora">${hhmm(e.inicio)}</span><span class="dur">${quien ? `${esc(quien)} · ` : ""}${mmss(e.duracion)}${e.alerta ? " · con alerta" : ""}</span><span class="tag tono-${a.tono}">${a.nombre}</span></li>`;
         })
         .join("")
     : `<li class="vacio">Todavía no hay atenciones registradas hoy.</li>`;
@@ -451,7 +476,7 @@ function procesarBlendshapes(bs, caja) {
   estado.historial.push(probs);
   if (estado.historial.length > VENTANA) estado.historial.shift();
   const g = ganadora(promediar(estado.historial));
-  const lectura = { emocion: g.emocion, confianza: g.confianza };
+  const lectura = { emocion: g.emocion, confianza: g.confianza, huesped: rec.persona?.uid ?? null };
 
   marcarLinea(lectura.emocion);
   renderFoco(lectura, caja);
@@ -1018,6 +1043,7 @@ async function entrar(modo) {
   } else if (cliente && usuario) {
     estado.store = new SupabaseStore(cliente);
     estado.store.onError = () => aviso("No se pudieron enviar los datos a Supabase. Se reintentará.", 4000);
+    estado.store.onEsquemaViejo = () => aviso("Falta ejecutar huespedes.sql en Supabase para guardar los huéspedes. Mientras tanto se guarda todo lo demás.", 8000);
   } else {
     estado.store = new LocalStore();
   }
@@ -1026,6 +1052,14 @@ async function entrar(modo) {
   } catch (e) {
     estado.datos = { registros: [], episodios: [] };
     aviso(`No se pudo cargar el historial: ${e.message}`, 5000);
+  }
+  if (modo !== "demo") {
+    try {
+      await recargarGaleria();
+      await enviarFichas(rec.galeria);
+    } catch {
+      /* IndexedDB no disponible: se sigue sin fichas */
+    }
   }
   const quien = modo !== "demo" && usuario ? ` · ${usuario.email}` : "";
   $("modo-texto").textContent = modo === "demo" ? "Modo demo · datos simulados" : `${estado.store.nombre}${quien}`;

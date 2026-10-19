@@ -1,5 +1,6 @@
 -- Esquema para la recepción del hotel. Pegar completo en Supabase > SQL Editor > Run.
--- Solo guarda datos anónimos y resumidos (emoción, confianza, horarios). Nunca imágenes ni vectores faciales.
+-- Guarda datos resumidos (emoción, confianza, horarios). Nunca imágenes ni vectores faciales.
+-- Después de este archivo, ejecutar también huespedes.sql (fichas de huéspedes y vista "atenciones").
 
 create table if not exists public.perfiles (
   user_id uuid primary key references auth.users (id) on delete cascade,

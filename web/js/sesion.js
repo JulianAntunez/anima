@@ -11,7 +11,7 @@ export class Sesion {
     this.ultimoRegistro = 0;
   }
 
-  // lectura: null (sin rostro) o { emocion, confianza }
+  // lectura: null (sin rostro) o { emocion, confianza, huesped? }  (huesped = uid del cliente reconocido)
   procesar(ts, lectura) {
     const salida = { registros: [], cerrado: null, alertaNueva: false };
 
@@ -21,11 +21,12 @@ export class Sesion {
     }
 
     if (!this.actual) {
-      this.actual = { id: ts, inicio: ts, ultima: ts, conteo: {}, alerta: false, desdeAlerta: null };
+      this.actual = { id: ts, inicio: ts, ultima: ts, conteo: {}, huespedes: {}, alerta: false, desdeAlerta: null };
       this.ultimaEtiqueta = null;
     }
     const ep = this.actual;
     ep.ultima = ts;
+    if (lectura.huesped) ep.huespedes[lectura.huesped] = (ep.huespedes[lectura.huesped] || 0) + 1;
 
     if (lectura.emocion !== "incierto") {
       ep.conteo[lectura.emocion] = (ep.conteo[lectura.emocion] || 0) + 1;
@@ -66,6 +67,15 @@ export class Sesion {
         dominante = e;
       }
     }
-    return { id: ep.id, inicio: ep.inicio, fin: ep.ultima, duracion, dominante, alerta: ep.alerta };
+    // El huésped de la atención es el que más veces se reconoció mientras duró.
+    let huesped = null;
+    let veces = 0;
+    for (const [uid, n] of Object.entries(ep.huespedes)) {
+      if (n > veces) {
+        veces = n;
+        huesped = uid;
+      }
+    }
+    return { id: ep.id, inicio: ep.inicio, fin: ep.ultima, duracion, dominante, alerta: ep.alerta, huesped };
   }
 }
