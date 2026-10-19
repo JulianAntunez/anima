@@ -7,6 +7,7 @@ import { CONFIG } from "./config.js";
 import { CANAL, datosCliente } from "./canal.js";
 import { cargarReconocedor, embeddingDe } from "./reconocimiento.js";
 import { buscar, promediar as promediarEmbeddings, decidirIdentidad } from "./reconocer.js";
+import { asociarCaras, principalDe } from "./seguimiento.js";
 import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas } from "./personas.js";
 
 const $ = (id) => document.getElementById(id);
@@ -20,6 +21,7 @@ let cliente = null;
 let usuario = null;
 
 const VENTANA = 4;
+const MAX_CARAS = 4;
 const MS_ENTRE_LECTURAS = 80;
 const MEDIAPIPE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
@@ -38,6 +40,10 @@ const estado = {
   stream: null,
   rafId: null,
   demoTimer: null,
+  caras: [],
+  secCaras: 0,
+  principalId: null,
+  extrasCanal: [],
   ultimaLectura: 0,
   ultimoVideoTime: -1,
 };
@@ -104,7 +110,6 @@ const REG_MUESTRAS = 10;
 const rec = { listo: false, cargando: false, galeria: [], persona: null, auto: false, ocupado: false, ultimo: 0, sinRostroDesde: 0, vistoDesdeCarga: false, registro: null };
 const MS_RETIRO = 4000;
 const MS_VERIFICAR = 1500; // con alguien ya reconocido se vuelve a comprobar su identidad cada tanto
-let verificacion = { candidato: null, dudas: 0 };
 
 // Se llama en cada cuadro con rostro: sirve para saber que el cliente sigue frente al mostrador.
 function marcarPresencia() {
@@ -147,9 +152,29 @@ function aplicarPersona(p, auto) {
   publicarCliente();
 }
 
-async function tickReconocimiento(video, lm) {
+// La persona principal es la cara más grande; las demás caras se identifican y se muestran con su nombre.
+function nuevaCara() {
+  return { id: ++estado.secCaras, persona: null, verif: { candidato: null, dudas: 0 }, ultimoId: 0, historial: [] };
+}
+
+// Mantiene el cliente de la pantalla alineado con la persona principal.
+function sincronizarPrincipal() {
+  const p = principalDe(estado.caras);
+  if (!p) return;
+  if (p.persona && p.persona.id !== rec.persona?.id) {
+    aplicarPersona(p.persona, true);
+    aviso(`Reconocido: ${p.persona.nombre}`);
+  } else if (!p.persona && p.ultimoId > 0 && rec.persona && rec.auto) {
+    rec.persona = null;
+    limpiarCliente("Persona no registrada.");
+  }
+}
+
+async function tickReconocimiento(video) {
   if (!rec.listo || rec.ocupado || estado.modo !== "camara" || estado.pausado) return;
   const ahora = Date.now();
+  const principal = principalDe(estado.caras);
+  if (!principal) return;
 
   if (rec.registro) {
     const r = rec.registro;
@@ -157,7 +182,7 @@ async function tickReconocimiento(video, lm) {
     rec.ocupado = true;
     try {
       r.ultimo = ahora;
-      r.muestras.push(await embeddingDe(video, lm, video.videoWidth, video.videoHeight));
+      r.muestras.push(await embeddingDe(video, principal.lm, video.videoWidth, video.videoHeight));
       aviso(`Registrando… mirá a la cámara (${r.muestras.length}/${REG_MUESTRAS})`, 0);
       if (r.muestras.length >= REG_MUESTRAS) await terminarRegistro();
     } catch {
@@ -169,20 +194,21 @@ async function tickReconocimiento(video, lm) {
     return;
   }
 
-  if (!rec.galeria.length || ahora - rec.ultimo < (rec.persona ? MS_VERIFICAR : 1000)) return;
-  rec.ultimo = ahora;
+  if (!rec.galeria.length) return;
+  // Se revisa una cara por vez: la que hace más tiempo no se comprueba
+  const toca = estado.caras
+    .filter((c) => ahora - c.ultimoId >= (c.persona ? MS_VERIFICAR : 1000))
+    .sort((a, b) => a.ultimoId - b.ultimoId)[0];
+  if (!toca) return;
+  toca.ultimoId = ahora;
   rec.ocupado = true;
   try {
-    const m = buscar(await embeddingDe(video, lm, video.videoWidth, video.videoHeight), rec.galeria);
-    const d = decidirIdentidad(rec.persona, m, verificacion);
-    verificacion = d.estado;
-    if (d.accion === "reconocer" || d.accion === "cambiar") {
-      aplicarPersona(d.persona, true);
-      aviso(`Reconocido: ${d.persona.nombre}`);
-    } else if (d.accion === "olvidar") {
-      rec.persona = null;
-      limpiarCliente("Persona no registrada.");
-    }
+    const m = buscar(await embeddingDe(video, toca.lm, video.videoWidth, video.videoHeight), rec.galeria);
+    const d = decidirIdentidad(toca.persona, m, toca.verif);
+    toca.verif = d.estado;
+    if (d.accion === "reconocer" || d.accion === "cambiar") toca.persona = d.persona;
+    else if (d.accion === "olvidar") toca.persona = null;
+    sincronizarPrincipal();
   } catch {
     /* un cuadro que falla se ignora */
   } finally {
@@ -201,7 +227,6 @@ function sinRostroReconocimiento() {
   if (rec.vistoDesdeCarga && ahora - rec.sinRostroDesde > MS_RETIRO) {
     const hayDatos = datosActuales.nombre || datosActuales.habitacion || datosActuales.estadia;
     rec.persona = null;
-    verificacion = { candidato: null, dudas: 0 };
     rec.vistoDesdeCarga = false;
     if (hayDatos) limpiarCliente("El cliente se retiró.");
   }
@@ -238,6 +263,11 @@ async function terminarRegistro() {
   await recargarGaleria();
   rec.persona = rec.galeria.find((p) => p.nombre.toLowerCase() === datos.nombre.toLowerCase()) || null;
   rec.auto = false;
+  const principal = principalDe(estado.caras);
+  if (principal) {
+    principal.persona = rec.persona;
+    principal.verif = { candidato: null, dudas: 0 };
+  }
   estadoRec();
   publicarCliente();
   aviso(`Cliente registrado: ${datos.nombre}`, 4000);
@@ -246,7 +276,11 @@ async function terminarRegistro() {
 async function olvidarCliente() {
   if (!rec.persona) return aviso("No hay un cliente reconocido en este momento.");
   const nombre = rec.persona.nombre;
-  await eliminarPersona(rec.persona.id);
+  const idBorrado = rec.persona.id;
+  await eliminarPersona(idBorrado);
+  estado.caras.forEach((c) => {
+    if (c.persona?.id === idBorrado) c.persona = null;
+  });
   rec.persona = null;
   await recargarGaleria();
   estadoRec();
@@ -258,6 +292,7 @@ async function borrarRegistrados() {
   if (!rec.galeria.length) return aviso("No hay clientes registrados.");
   if (!confirm("¿Borrar a todos los clientes registrados en este navegador? No se puede deshacer.")) return;
   await borrarPersonas();
+  estado.caras.forEach((c) => (c.persona = null));
   rec.persona = null;
   await recargarGaleria();
   estadoRec();
@@ -276,7 +311,7 @@ if (canal) {
 /* ---------- render ---------- */
 
 function renderFoco(lectura, caja) {
-  canal?.postMessage({ tipo: "lectura", emocion: lectura ? lectura.emocion : null, confianza: lectura ? lectura.confianza : 0, caja: caja || null });
+  canal?.postMessage({ tipo: "lectura", emocion: lectura ? lectura.emocion : null, confianza: lectura ? lectura.confianza : 0, caja: caja || null, otras: estado.extrasCanal });
   const animo = animoDe(lectura ? lectura.emocion : "ninguno");
   const tono = animo.tono;
   $("animo").className = `animo tono-${tono}`;
@@ -293,7 +328,7 @@ function renderFoco(lectura, caja) {
     el.style.top = `${caja.y * 100}%`;
     el.style.width = `${caja.w * 100}%`;
     el.style.height = `${caja.h * 100}%`;
-    $("chip").textContent = `${animo.nombre}${lectura ? ` · ${Math.round(lectura.confianza * 100)}%` : ""}`;
+    $("chip").textContent = `${rec.persona ? `${rec.persona.nombre} · ` : ""}${animo.nombre}${lectura ? ` · ${Math.round(lectura.confianza * 100)}%` : ""}`;
   } else {
     el.hidden = true;
   }
@@ -457,7 +492,7 @@ async function cargarMediaPipe() {
     FaceLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: "models/face_landmarker.task", delegate },
       runningMode: "VIDEO",
-      numFaces: 1,
+      numFaces: MAX_CARAS,
       outputFaceBlendshapes: true,
     });
   try {
@@ -590,6 +625,103 @@ function detenerCamara() {
   estado.stream?.getTracks().forEach((t) => t.stop());
   estado.stream = null;
   $("video").srcObject = null;
+  estado.caras = [];
+  estado.extrasCanal = [];
+  renderExtras([]);
+  renderPresentes();
+}
+
+function leerCaras(res) {
+  const caras = [];
+  (res.faceLandmarks || []).forEach((lm, i) => {
+    const forma = res.faceBlendshapes?.[i]?.categories;
+    if (!forma) return;
+    const bs = {};
+    for (const c of forma) bs[c.categoryName] = c.score;
+    let xmin = 1, xmax = 0, ymin = 1, ymax = 0;
+    for (const p of lm) {
+      if (p.x < xmin) xmin = p.x;
+      if (p.x > xmax) xmax = p.x;
+      if (p.y < ymin) ymin = p.y;
+      if (p.y > ymax) ymax = p.y;
+    }
+    caras.push({ lm, bs, caja: { x: xmin, y: ymin, w: xmax - xmin, h: ymax - ymin } });
+  });
+  return caras;
+}
+
+// el video se muestra en espejo: se invierte la X
+const espejo = (c) => ({ x: 1 - (c.x + c.w), y: c.y, w: c.w, h: c.h });
+
+function renderExtras(extras) {
+  const cont = $("extras");
+  while (cont.children.length < extras.length) {
+    const caja = document.createElement("div");
+    caja.className = "caja";
+    caja.appendChild(Object.assign(document.createElement("span"), { className: "chip" }));
+    cont.appendChild(caja);
+  }
+  [...cont.children].forEach((el, i) => {
+    const e = extras[i];
+    el.hidden = !e;
+    if (!e) return;
+    const animo = animoDe(e.lectura.emocion);
+    el.className = `caja tono-${animo.tono}`;
+    el.style.left = `${e.caja.x * 100}%`;
+    el.style.top = `${e.caja.y * 100}%`;
+    el.style.width = `${e.caja.w * 100}%`;
+    el.style.height = `${e.caja.h * 100}%`;
+    el.firstChild.textContent = `${e.nombre ? `${e.nombre} · ` : ""}${animo.nombre}`;
+  });
+}
+
+function renderPresentes() {
+  const reconocidas = estado.caras.filter((c) => c.persona);
+  const texto = reconocidas.length ? `En el mostrador: ${reconocidas.map((c) => `${c.persona.nombre} (${animoDe(c.lectura.emocion).nombre})`).join(", ")}` : "";
+  const el = $("presentes");
+  if (el.textContent !== texto) {
+    el.textContent = texto;
+    el.hidden = !texto;
+  }
+}
+
+function procesarCaras(video, res) {
+  const detectadas = leerCaras(res);
+  if (!detectadas.length) {
+    estado.caras = [];
+    estado.extrasCanal = [];
+    renderExtras([]);
+    renderPresentes();
+    return sinRostro();
+  }
+  const anteriores = estado.caras;
+  const idx = asociarCaras(anteriores.map((c) => c.caja), detectadas.map((d) => d.caja));
+  estado.caras = detectadas.map((d, i) => {
+    const cara = idx[i] >= 0 ? anteriores[idx[i]] : nuevaCara();
+    Object.assign(cara, d);
+    const probs = probabilidades(cara.bs, { reposo: estado.reposo, neutralBias: estado.neutralBias });
+    cara.historial.push(probs);
+    if (cara.historial.length > VENTANA) cara.historial.shift();
+    const g = ganadora(promediar(cara.historial));
+    cara.lectura = { emocion: g.emocion, confianza: g.confianza };
+    return cara;
+  });
+
+  const principal = principalDe(estado.caras);
+  if (principal.id !== estado.principalId) {
+    estado.principalId = principal.id;
+    estado.historial = [];
+  }
+  sincronizarPrincipal();
+  tickReconocimiento(video);
+
+  const extras = estado.caras
+    .filter((c) => c !== principal)
+    .map((c) => ({ caja: espejo(c.caja), nombre: c.persona?.nombre || null, lectura: c.lectura }));
+  estado.extrasCanal = extras.map((e) => ({ caja: e.caja, emocion: e.lectura.emocion, nombre: e.nombre }));
+  renderExtras(extras);
+  renderPresentes();
+  procesarBlendshapes(principal.bs, espejo(principal.caja));
 }
 
 function bucleCamara() {
@@ -607,22 +739,7 @@ function bucleCamara() {
     } catch {
       return;
     }
-    const lm = res.faceLandmarks?.[0];
-    const forma = res.faceBlendshapes?.[0]?.categories;
-    if (!lm || !forma) return sinRostro();
-
-    const bs = {};
-    for (const c of forma) bs[c.categoryName] = c.score;
-    let xmin = 1, xmax = 0, ymin = 1, ymax = 0;
-    for (const p of lm) {
-      if (p.x < xmin) xmin = p.x;
-      if (p.x > xmax) xmax = p.x;
-      if (p.y < ymin) ymin = p.y;
-      if (p.y > ymax) ymax = p.y;
-    }
-    // el video se muestra en espejo: se invierte la X
-    tickReconocimiento(video, lm);
-    procesarBlendshapes(bs, { x: 1 - xmax, y: ymin, w: xmax - xmin, h: ymax - ymin });
+    procesarCaras(video, res);
   };
   estado.rafId = requestAnimationFrame(paso);
 }

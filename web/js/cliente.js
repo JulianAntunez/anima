@@ -18,6 +18,31 @@ function saludo(nombre, habitacion, estadia) {
   $("cli-datos").textContent = [habitacion ? `Habitación ${habitacion}` : "", estadia].filter(Boolean).join(" · ");
 }
 
+function pintarOtras(otras) {
+  const cont = $("cli-extras");
+  const lista = st.ocultar ? [] : otras || [];
+  while (cont.children.length < lista.length) {
+    const caja = document.createElement("div");
+    caja.className = "caja";
+    caja.appendChild(Object.assign(document.createElement("span"), { className: "chip" }));
+    cont.appendChild(caja);
+  }
+  [...cont.children].forEach((el, i) => {
+    const o = lista[i];
+    el.hidden = !o;
+    if (!o) return;
+    const a = animoCliente(o.emocion);
+    el.className = `caja tono-${a.tono}`;
+    el.style.left = `${o.caja.x * 100}%`;
+    el.style.top = `${o.caja.y * 100}%`;
+    el.style.width = `${o.caja.w * 100}%`;
+    el.style.height = `${o.caja.h * 100}%`;
+    el.firstChild.textContent = o.nombre || a.nombre;
+  });
+  const nombres = lista.map((o) => o.nombre).filter(Boolean);
+  $("cli-grupo").textContent = nombres.length ? `También en el mostrador: ${nombres.join(", ")}` : "";
+}
+
 function pintar(emocion, caja) {
   const a = animoCliente(emocion);
   $("cli-animo").className = `animo cli-animo tono-${a.tono}`;
@@ -103,6 +128,7 @@ canal.onmessage = ({ data }) => {
     st.ultimaLectura = Date.now();
     st.emocion = data.emocion || "ninguno";
     pintar(st.emocion, data.emocion ? data.caja : null);
+    pintarOtras(data.emocion ? data.otras : []);
   }
 };
 
@@ -111,6 +137,7 @@ setInterval(() => {
   if (st.activo && !st.ocultar && Date.now() - st.ultimaLectura > 2500 && st.emocion !== "ninguno") {
     st.emocion = "ninguno";
     pintar("ninguno", null);
+    pintarOtras([]);
   }
 }, 1000);
 

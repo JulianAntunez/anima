@@ -122,6 +122,8 @@ select { background: var(--surface); border: 1px solid var(--line); border-radiu
 .caja.tono-atencion .chip { background: var(--atencion-fill); color: #2b1d00; }
 .caja.tono-alerta .chip { background: var(--alerta-fill); }
 
+.extras { position: absolute; inset: 0; pointer-events: none; }
+.presentes { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
 .lectura { display: flex; flex-direction: column; gap: 10px; }
 .animo { border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; transition: background .25s, color .25s; }
 .animo.tono-positivo { background: var(--positivo-bg); color: var(--positivo-fg); }
