@@ -55,3 +55,48 @@ test("puntosDe toma los 5 puntos y escala a píxeles", () => {
   assert.deepEqual(p[2], [1, 250]);
   assert.deepEqual(p[0], [468, 250]);
 });
+
+import { decidirIdentidad } from "../js/reconocer.js";
+
+const ana = { id: 1, nombre: "Ana" };
+const beto = { id: 2, nombre: "Beto" };
+const coincide = (persona, similitud = 0.7) => ({ persona, similitud });
+
+test("sin nadie reconocido, una coincidencia reconoce de inmediato", () => {
+  assert.equal(decidirIdentidad(null, coincide(ana)).accion, "reconocer");
+  assert.equal(decidirIdentidad(null, null).accion, "ninguna");
+});
+
+test("la misma persona reinicia las dudas", () => {
+  const dudando = decidirIdentidad(ana, coincide(beto)).estado;
+  assert.equal(dudando.dudas, 1);
+  assert.deepEqual(decidirIdentidad(ana, coincide(ana), dudando).estado, { candidato: null, dudas: 0 });
+});
+
+test("llega otra persona registrada: cambia solo tras dos lecturas seguidas", () => {
+  const r1 = decidirIdentidad(ana, coincide(beto));
+  assert.equal(r1.accion, "ninguna");
+  const r2 = decidirIdentidad(ana, coincide(beto), r1.estado);
+  assert.equal(r2.accion, "cambiar");
+  assert.equal(r2.persona.nombre, "Beto");
+});
+
+test("llega alguien no registrado: se olvida la identidad tras dos lecturas seguidas", () => {
+  const r1 = decidirIdentidad(ana, null);
+  assert.equal(r1.accion, "ninguna");
+  assert.equal(decidirIdentidad(ana, null, r1.estado).accion, "olvidar");
+});
+
+test("una lectura dudosa aislada no cambia nada", () => {
+  const r1 = decidirIdentidad(ana, null);
+  const r2 = decidirIdentidad(ana, coincide(ana), r1.estado);
+  assert.equal(r2.accion, "ninguna");
+  assert.equal(decidirIdentidad(ana, null, r2.estado).accion, "ninguna");
+});
+
+test("lecturas alternadas entre candidatos distintos no cambian la identidad", () => {
+  const r1 = decidirIdentidad(ana, coincide(beto));
+  const r2 = decidirIdentidad(ana, null, r1.estado);
+  assert.equal(r2.accion, "ninguna");
+  assert.equal(r2.estado.dudas, 1);
+});

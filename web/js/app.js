@@ -6,7 +6,7 @@ import { construirInforme } from "./informe.js";
 import { CONFIG } from "./config.js";
 import { CANAL, datosCliente } from "./canal.js";
 import { cargarReconocedor, embeddingDe } from "./reconocimiento.js";
-import { buscar, promediar as promediarEmbeddings } from "./reconocer.js";
+import { buscar, promediar as promediarEmbeddings, decidirIdentidad } from "./reconocer.js";
 import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas } from "./personas.js";
 
 const $ = (id) => document.getElementById(id);
@@ -103,6 +103,8 @@ function limpiarCliente(texto = "Datos del cliente borrados.") {
 const REG_MUESTRAS = 10;
 const rec = { listo: false, cargando: false, galeria: [], persona: null, auto: false, ocupado: false, ultimo: 0, sinRostroDesde: 0, vistoDesdeCarga: false, registro: null };
 const MS_RETIRO = 4000;
+const MS_VERIFICAR = 1500; // con alguien ya reconocido se vuelve a comprobar su identidad cada tanto
+let verificacion = { candidato: null, dudas: 0 };
 
 // Se llama en cada cuadro con rostro: sirve para saber que el cliente sigue frente al mostrador.
 function marcarPresencia() {
@@ -167,14 +169,19 @@ async function tickReconocimiento(video, lm) {
     return;
   }
 
-  if (rec.persona || !rec.galeria.length || ahora - rec.ultimo < 1000) return;
+  if (!rec.galeria.length || ahora - rec.ultimo < (rec.persona ? MS_VERIFICAR : 1000)) return;
   rec.ultimo = ahora;
   rec.ocupado = true;
   try {
     const m = buscar(await embeddingDe(video, lm, video.videoWidth, video.videoHeight), rec.galeria);
-    if (m) {
-      aplicarPersona(m.persona, true);
-      aviso(`Reconocido: ${m.persona.nombre}`);
+    const d = decidirIdentidad(rec.persona, m, verificacion);
+    verificacion = d.estado;
+    if (d.accion === "reconocer" || d.accion === "cambiar") {
+      aplicarPersona(d.persona, true);
+      aviso(`Reconocido: ${d.persona.nombre}`);
+    } else if (d.accion === "olvidar") {
+      rec.persona = null;
+      limpiarCliente("Persona no registrada.");
     }
   } catch {
     /* un cuadro que falla se ignora */
@@ -194,6 +201,7 @@ function sinRostroReconocimiento() {
   if (rec.vistoDesdeCarga && ahora - rec.sinRostroDesde > MS_RETIRO) {
     const hayDatos = datosActuales.nombre || datosActuales.habitacion || datosActuales.estadia;
     rec.persona = null;
+    verificacion = { candidato: null, dudas: 0 };
     rec.vistoDesdeCarga = false;
     if (hayDatos) limpiarCliente("El cliente se retiró.");
   }

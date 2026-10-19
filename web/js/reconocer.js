@@ -84,3 +84,21 @@ export function buscar(emb, galeria, umbral = UMBRAL) {
   }
   return mejor && mejor.similitud >= umbral ? mejor : null;
 }
+
+// Decide qué hacer con la identidad cuando ya hay alguien reconocido y llega una lectura nueva.
+// Para cambiar de persona (o soltar la identidad) se exigen varias lecturas seguidas y coincidentes,
+// así un cuadro dudoso no hace parpadear el nombre.
+// actual: persona reconocida o null. coincidencia: resultado de buscar() o null.
+// estado: { candidato, dudas } que se devuelve actualizado.
+export function decidirIdentidad(actual, coincidencia, estado = { candidato: null, dudas: 0 }, lecturasParaCambiar = 2) {
+  const limpio = { candidato: null, dudas: 0 };
+  if (!actual) {
+    return coincidencia ? { accion: "reconocer", persona: coincidencia.persona, estado: limpio } : { accion: "ninguna", estado: limpio };
+  }
+  if (coincidencia && coincidencia.persona.id === actual.id) return { accion: "ninguna", estado: limpio };
+
+  const clave = coincidencia ? coincidencia.persona.id : 0;
+  const dudas = estado.candidato === clave ? estado.dudas + 1 : 1;
+  if (dudas < lecturasParaCambiar) return { accion: "ninguna", estado: { candidato: clave, dudas } };
+  return coincidencia ? { accion: "cambiar", persona: coincidencia.persona, estado: limpio } : { accion: "olvidar", estado: limpio };
+}
