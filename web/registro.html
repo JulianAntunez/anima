@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <title>Ánima · Registro del huésped</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="pagina-movil">
+<main class="movil">
+  <header class="cli-marca">
+    <i class="ti ti-building-skyscraper" aria-hidden="true"></i>
+    <span>Ánima · Hospitalidad que se anticipa</span>
+  </header>
+
+  <section id="p-carga" class="card">
+    <p>Verificando tu enlace…</p>
+  </section>
+
+  <section id="p-invalido" class="card" hidden>
+    <p id="m-error" class="mal"></p>
+  </section>
+
+  <section id="p-intro" class="card" hidden>
+    <h1>Hola, <span id="m-nombre"></span></h1>
+    <p>Vamos a registrarte para que la recepción te reconozca y te atienda más rápido. Solo lleva unos segundos.</p>
+    <label class="consent">
+      <input type="checkbox" id="m-consent">
+      <span>Acepto que el hotel guarde mi nombre, los datos de mi estadía y un vector numérico de mi rostro (no se guardan fotos) para reconocerme en la recepción. Puedo pedir que lo borren cuando quiera.</span>
+    </label>
+    <button id="m-empezar" class="primario" disabled><i class="ti ti-camera" aria-hidden="true"></i>Tomar mi foto</button>
+    <p id="m-prep" class="estado-cli" role="status"></p>
+  </section>
+
+  <section id="p-camara" class="card" hidden>
+    <div class="escenario">
+      <video id="m-video" playsinline muted></video>
+    </div>
+    <div class="progreso" aria-hidden="true"><i id="m-barra"></i></div>
+    <p id="m-guia" class="estado-cli" role="status">Preparando la cámara…</p>
+  </section>
+
+  <section id="p-final" class="card" hidden>
+    <p id="m-final" class="ok"></p>
+    <button id="m-reintentar" hidden>Reintentar</button>
+  </section>
+
+  <p class="cli-privacidad"><i class="ti ti-lock" aria-hidden="true"></i>No se guarda ninguna foto. Todo el análisis ocurre en tu teléfono.</p>
+</main>
+
+<script type="module" src="js/registro.js"></script>
+</body>
+</html>

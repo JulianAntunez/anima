@@ -70,6 +70,8 @@ export class LocalStore {
 
   async quitarHuespedes() {}
 
+  async vaciar() {}
+
   async borrarTodo() {
     const claves = [];
     for (let i = 0; i < this.storage.length; i++) {
@@ -96,13 +98,15 @@ export class SupabaseStore {
     for (const h of lista) {
       this.cola.borrados = this.cola.borrados.filter((id) => id !== h.uid);
       this.cola.huespedes = this.cola.huespedes.filter((x) => x.id !== h.uid);
-      this.cola.huespedes.push({
+      const fila = {
         id: h.uid,
         nombre: h.nombre,
         habitacion: h.habitacion || "",
         estadia: h.estadia || "",
         consentimiento_ts: h.consentimiento_ts || new Date().toISOString(),
-      });
+      };
+      if (h.embedding?.length) fila.embedding = Array.from(h.embedding);
+      this.cola.huespedes.push(fila);
     }
     if (lista.length) this._programar();
   }
@@ -160,7 +164,13 @@ export class SupabaseStore {
         pendiente.borrados = [];
       }
       if (pendiente.huespedes.length) {
-        const { error } = await this.client.from("huespedes").upsert(pendiente.huespedes, { onConflict: "id" });
+        const subir = (filas) => this.client.from("huespedes").upsert(filas, { onConflict: "id" });
+        const sinVector = (filas) => filas.map(({ embedding, ...resto }) => resto);
+        let { error } = await subir(this.sinVector ? sinVector(pendiente.huespedes) : pendiente.huespedes);
+        if (error && this._faltaVector(error)) {
+          // Si todavía no se ejecutó registro_movil.sql, se guardan las fichas sin el vector.
+          ({ error } = await subir(sinVector(pendiente.huespedes)));
+        }
         if (error && !this._esquemaViejo(error)) throw error;
         if (error) pendiente.borrados = [];
         pendiente.huespedes = [];
@@ -189,6 +199,43 @@ export class SupabaseStore {
       this.onError?.(err);
       this._programar();
     }
+  }
+
+  _faltaVector(error) {
+    const texto = `${error?.message || ""} ${error?.details || ""}`;
+    const falta = /embedding/i.test(texto) && (["PGRST204", "42703"].includes(error?.code) || /column|schema cache|does not exist/i.test(texto));
+    if (falta && !this.sinVector) {
+      this.sinVector = true;
+      this.onSinVector?.();
+    }
+    return falta;
+  }
+
+  // Clientes guardados en la nube, con su vector facial (null si la columna todavía no existe).
+  async cargarHuespedes() {
+    const columnas = "id,nombre,habitacion,estadia,consentimiento_ts";
+    let { data, error } = await this.client.from("huespedes").select(this.sinVector ? columnas : `${columnas},embedding`).range(0, 4999);
+    if (error && !this.sinVector && this._faltaVector(error)) ({ data, error } = await this.client.from("huespedes").select(columnas).range(0, 4999));
+    if (error) {
+      if (this._esquemaViejo(error)) return [];
+      throw error;
+    }
+    return data.map((x) => ({ uid: x.id, nombre: x.nombre, habitacion: x.habitacion, estadia: x.estadia, consentimiento_ts: x.consentimiento_ts, embedding: x.embedding ?? null }));
+  }
+
+  // Invitación de un solo uso para que el huésped se registre desde su teléfono (vence a los 15 minutos).
+  async crearInvitacion({ nombre, habitacion = "", estadia = "" }) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    const token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    const { error } = await this.client.from("invitaciones").insert({ token, nombre, habitacion, estadia });
+    if (error) throw error;
+    return token;
+  }
+
+  async invitacionUsada(token) {
+    const { data, error } = await this.client.from("invitaciones").select("usada").eq("token", token).maybeSingle();
+    if (error) throw error;
+    return !!data?.usada;
   }
 
   // Si todavía no se ejecutó huespedes.sql en Supabase, se sigue guardando lo anónimo y se avisa una sola vez.

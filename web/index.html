@@ -134,10 +134,11 @@
             <p class="estado-cli" style="margin:0 0 8px">Reconocimiento automático: tildá el consentimiento y apretá <strong>Registrar cliente</strong> una vez. Después lo identifica solo.</p>
             <label class="consent consent-chico">
               <input type="checkbox" id="cli-consent">
-              <span>El cliente acepta que se guarde su vector facial en este equipo (sin fotos) y su nombre y datos de estadía en la base del hotel.</span>
+              <span>El cliente acepta que se guarden su nombre, los datos de su estadía y un vector numérico de su rostro (sin fotos) en la base del hotel.</span>
             </label>
             <div class="botones">
               <button type="button" id="btn-registrar-cliente"><i class="ti ti-user-plus" aria-hidden="true"></i>Registrar cliente</button>
+              <button type="button" id="btn-movil" title="El cliente se registra con su propio teléfono"><i class="ti ti-device-mobile" aria-hidden="true"></i>Desde su teléfono</button>
               <button type="button" id="btn-olvidar-cliente"><i class="ti ti-user-minus" aria-hidden="true"></i>Olvidar</button>
               <button type="button" id="btn-borrar-registrados" class="peligro" title="Borrar todos los clientes registrados"><i class="ti ti-trash" aria-hidden="true"></i></button>
             </div>
@@ -164,7 +165,7 @@
 
   <footer class="pie">
     <i class="ti ti-lock" aria-hidden="true"></i>
-    <span>El análisis ocurre en este navegador. Solo se guardan etiquetas, horarios y las fichas de clientes registrados, nunca imágenes ni el vector facial en la nube. Indicador aproximado de expresión facial, no un diagnóstico de la persona.</span>
+    <span>El análisis ocurre en este navegador. Solo se guardan etiquetas, horarios y las fichas de clientes registrados con su consentimiento (nombre, estadía y vector numérico), nunca fotos. Indicador aproximado de expresión facial, no un diagnóstico de la persona.</span>
   </footer>
 </main>
 
@@ -204,6 +205,20 @@
       <button type="button" id="cfg-inicio" title="Cierra la sesión de trabajo y vuelve a la pantalla de inicio">Volver al inicio</button>
       <button value="cerrar" class="primario">Listo</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-movil" class="dlg">
+  <form id="form-movil" method="dialog">
+    <h2>Registrar desde el teléfono</h2>
+    <p id="movil-sub" class="dlg-sub"></p>
+    <div id="movil-qr" class="movil-qr" aria-label="Código QR para registrarse"></div>
+    <label class="campo"><span>O enviale este enlace</span>
+      <input id="movil-link" type="text" readonly>
+    </label>
+    <div class="botones"><button type="button" id="movil-copiar"><i class="ti ti-copy" aria-hidden="true"></i>Copiar enlace</button></div>
+    <p id="movil-estado" class="estado-cli" role="status"></p>
+    <div class="dlg-acciones"><button value="cerrar" class="primario">Cerrar</button></div>
   </form>
 </dialog>
 

@@ -8,7 +8,8 @@ import { CANAL, datosCliente } from "./canal.js";
 import { cargarReconocedor, embeddingDe } from "./reconocimiento.js";
 import { buscar, promediar as promediarEmbeddings, decidirIdentidad } from "./reconocer.js";
 import { asociarCaras, principalDe } from "./seguimiento.js";
-import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas, fichaHuesped } from "./personas.js";
+import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas, fichaHuesped, importarPersona, marcarEnNube, eliminarPorUid } from "./personas.js";
+import { planificarSincronia } from "./sincronia.js";
 
 const $ = (id) => document.getElementById(id);
 const canal = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(CANAL) : null;
@@ -16,6 +17,7 @@ let datosActuales = datosCliente();
 let estadoCanal = { tipo: "estado", activo: false, demo: false };
 const SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 const JSPDF = "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/+esm";
+const QRCODE = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
 
 let cliente = null;
 let usuario = null;
@@ -140,6 +142,7 @@ async function enviarFichas(personas) {
 async function quitarFichas(personas) {
   try {
     await estado.store?.quitarHuespedes(personas.map((p) => p.uid).filter(Boolean));
+    await estado.store?.vaciar?.();
   } catch {
     /* se reintenta en la próxima sincronización */
   }
@@ -148,6 +151,106 @@ async function quitarFichas(personas) {
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 const nombreDeHuesped = (uid) => (uid ? rec.galeria.find((p) => p.uid === uid)?.nombre || "" : "");
+
+// Mantiene iguales los clientes de este navegador y los de la nube (vector incluido), para que quien se
+// registró desde su teléfono o desde otro equipo también se reconozca acá.
+let sincronizando = false;
+let sincronizadorIniciado = false;
+async function sincronizarNube() {
+  const store = estado.store;
+  if (sincronizando || !usuario || !store?.cargarHuespedes) return false;
+  sincronizando = true;
+  try {
+    await store.vaciar();
+    if (store.cola.borrados.length) return false; // un borrado no llegó a la nube: no se arriesga a reponer al cliente
+    const remotos = await store.cargarHuespedes();
+    const locales = await cargarGaleria();
+    const plan = planificarSincronia(locales, remotos, usuario.id);
+    for (const r of plan.descargar) await importarPersona(r, usuario.id);
+    for (const uid of plan.borrarLocal) await eliminarPorUid(uid);
+    if (plan.marcar.length) await marcarEnNube(plan.marcar, usuario.id);
+    if (plan.subir.length) await store.guardarHuespedes(plan.subir.map(fichaHuesped));
+    const cambios = plan.descargar.length + plan.borrarLocal.length > 0;
+    if (cambios) {
+      await recargarGaleria();
+      if (rec.listo) estadoRec();
+    }
+    return cambios;
+  } catch {
+    return false;
+  } finally {
+    sincronizando = false;
+  }
+}
+
+function iniciarSincronizador() {
+  if (sincronizadorIniciado || !estado.store?.cargarHuespedes) return;
+  sincronizadorIniciado = true;
+  setInterval(sincronizarNube, 20000);
+}
+
+/* ---------- registro desde el teléfono del huésped ---------- */
+
+let temporizadorMovil = null;
+
+async function cargarQR() {
+  if (globalThis.qrcode) return globalThis.qrcode;
+  await new Promise((ok, mal) => {
+    const sc = document.createElement("script");
+    sc.src = QRCODE;
+    sc.onload = ok;
+    sc.onerror = () => mal(new Error("No se pudo cargar el generador de QR"));
+    document.head.appendChild(sc);
+  });
+  return globalThis.qrcode;
+}
+
+async function abrirRegistroMovil() {
+  if (!estado.store?.crearInvitacion || !usuario) return avisarRegistro("Registrar desde el teléfono requiere iniciar sesión con Supabase.");
+  const nombre = $("cli-in-nombre").value.trim();
+  if (!nombre) return avisarRegistro("Escribí el nombre del cliente antes de pedirle que se registre desde su teléfono.");
+  let token;
+  try {
+    token = await estado.store.crearInvitacion({ nombre, habitacion: $("cli-in-hab").value.trim(), estadia: $("cli-in-estadia").value.trim() });
+  } catch (e) {
+    const falta = ["PGRST205", "42P01"].includes(e?.code);
+    return avisarRegistro(falta ? "Falta ejecutar registro_movil.sql en Supabase." : `No se pudo crear la invitación: ${e.message}`);
+  }
+  const url = new URL("registro.html", location.href);
+  url.hash = `t=${token}`;
+  $("movil-link").value = url.href;
+  $("movil-sub").textContent = `Pedile a ${nombre} que escanee el código con su teléfono. Vence en 15 minutos.`;
+  $("movil-estado").textContent = "Esperando que el cliente complete el registro…";
+  $("movil-qr").innerHTML = "";
+  try {
+    const qr = (await cargarQR())(0, "M");
+    qr.addData(url.href);
+    qr.make();
+    $("movil-qr").innerHTML = qr.createSvgTag(5, 2);
+  } catch {
+    $("movil-qr").textContent = "No se pudo dibujar el código QR. Copiá el enlace.";
+  }
+  $("dlg-movil").showModal();
+
+  clearInterval(temporizadorMovil);
+  const vence = Date.now() + 15 * 60 * 1000;
+  temporizadorMovil = setInterval(async () => {
+    if (!$("dlg-movil").open) return clearInterval(temporizadorMovil);
+    if (Date.now() > vence) {
+      $("movil-estado").textContent = "El código venció. Cerrá esta ventana y generá uno nuevo.";
+      return clearInterval(temporizadorMovil);
+    }
+    try {
+      if (!(await estado.store.invitacionUsada(token))) return;
+    } catch {
+      return;
+    }
+    clearInterval(temporizadorMovil);
+    $("movil-estado").textContent = `✓ ${nombre} quedó registrado desde su teléfono.`;
+    await sincronizarNube();
+    aviso(`Cliente registrado desde su teléfono: ${nombre}`, 4000);
+  }, 3000);
+}
 
 async function iniciarReconocimiento() {
   if (rec.listo || rec.cargando) return;
@@ -1056,7 +1159,10 @@ async function entrar(modo) {
   if (modo !== "demo") {
     try {
       await recargarGaleria();
-      await enviarFichas(rec.galeria);
+      if (estado.store.cargarHuespedes) {
+        await sincronizarNube();
+        iniciarSincronizador();
+      }
     } catch {
       /* IndexedDB no disponible: se sigue sin fichas */
     }
@@ -1089,6 +1195,15 @@ $("btn-limpiar-cliente").addEventListener("click", () => limpiarCliente());
 $("btn-registrar-cliente").addEventListener("click", iniciarRegistro);
 $("btn-olvidar-cliente").addEventListener("click", olvidarCliente);
 $("btn-borrar-registrados").addEventListener("click", borrarRegistrados);
+$("btn-movil").addEventListener("click", abrirRegistroMovil);
+$("movil-copiar").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("movil-link").value);
+    aviso("Enlace copiado.");
+  } catch {
+    $("movil-link").select();
+  }
+});
 $("btn-abrir-cliente").addEventListener("click", () => {
   window.open("cliente.html", "anima-cliente", "popup,width=1100,height=760");
 });

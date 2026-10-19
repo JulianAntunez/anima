@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { SupabaseStore } from "../js/store.js";
 
 // falla: { tabla: error } hace fallar los insert/upsert/delete de esa tabla.
-function clienteFalso({ falla = false, fallaEn = {}, sinColumnaHuesped = false } = {}) {
-  const tablas = { registros: [], episodios: [], huespedes: [] };
+function clienteFalso({ falla = false, fallaEn = {}, sinColumnaHuesped = false, sinColumnaVector = false } = {}) {
+  const tablas = { registros: [], episodios: [], huespedes: [], invitaciones: [] };
   const llamadas = [];
   const error = (nombre) => (falla ? new Error("sin red") : fallaEn[nombre] || null);
   const consulta = (nombre) => {
@@ -16,12 +16,15 @@ function clienteFalso({ falla = false, fallaEn = {}, sinColumnaHuesped = false }
           return { error: { code: "PGRST204", message: "Could not find the 'huesped_id' column of 'episodios' in the schema cache" } };
         }
         const e = error(nombre);
-        return e ? { error: e } : (tablas[nombre].push(...f), { error: null });
+        return e ? { error: e } : (tablas[nombre].push(...[].concat(f)), { error: null });
       },
       upsert: async (f) => {
         llamadas.push(`upsert:${nombre}`);
         const e = error(nombre);
         if (e) return { error: e };
+        if (nombre === "huespedes" && sinColumnaVector && f.some((x) => "embedding" in x)) {
+          return { error: { code: "PGRST204", message: "Could not find the 'embedding' column of 'huespedes' in the schema cache" } };
+        }
         for (const fila of f) {
           const i = tablas[nombre].findIndex((x) => x.id === fila.id);
           if (i >= 0) tablas[nombre][i] = fila;
@@ -30,6 +33,8 @@ function clienteFalso({ falla = false, fallaEn = {}, sinColumnaHuesped = false }
         return { error: null };
       },
       select: () => q,
+      eq: (col, v) => ((filas = filas.filter((x) => x[col] === v)), q),
+      maybeSingle: async () => ({ data: filas[0] ?? null, error: null }),
       gte: (col, v) => ((filas = filas.filter((x) => x[col] >= v)), q),
       lt: (col, v) => ((filas = filas.filter((x) => x[col] < v)), q),
       order: () => q,
@@ -90,17 +95,63 @@ test("carga el día en el formato interno", async () => {
   assert.equal((await s.cargarDia("2026-10-04")).registros.length, 0);
 });
 
-test("guarda la ficha del huésped sin vector y la actualiza sin duplicarla", async () => {
+test("guarda la ficha del huésped con su vector y la actualiza sin duplicarla", async () => {
   const c = clienteFalso();
   const s = new SupabaseStore(c, { intervaloMs: 60000 });
-  await s.guardarHuespedes([{ ...ficha("u1", "Ana"), embedding: [1, 2, 3] }]);
+  await s.guardarHuespedes([{ ...ficha("u1", "Ana"), embedding: Float32Array.from([1, 2, 3]) }]);
   await s.vaciar();
+  assert.deepEqual(c.tablas.huespedes[0].embedding, [1, 2, 3]);
   await s.guardarHuespedes([ficha("u1", "Ana María")]);
   await s.vaciar();
   assert.equal(c.tablas.huespedes.length, 1);
   assert.equal(c.tablas.huespedes[0].nombre, "Ana María");
   assert.equal(c.tablas.huespedes[0].habitacion, "204");
+});
+
+test("una ficha sin vector no borra el vector que ya estaba en la nube", async () => {
+  const s = new SupabaseStore(clienteFalso(), { intervaloMs: 60000 });
+  await s.guardarHuespedes([{ ...ficha("u1", "Ana"), embedding: null }]);
+  assert.ok(!("embedding" in s.cola.huespedes[0]));
+  clearTimeout(s.timer);
+});
+
+test("si falta la columna del vector, guarda la ficha sin vector y avisa una vez", async () => {
+  const c = clienteFalso({ sinColumnaVector: true });
+  const s = new SupabaseStore(c, { intervaloMs: 60000 });
+  let avisos = 0;
+  s.onSinVector = () => avisos++;
+  await s.guardarHuespedes([{ ...ficha("u1", "Ana"), embedding: [1, 2] }]);
+  await s.vaciar();
+  assert.equal(c.tablas.huespedes.length, 1);
   assert.ok(!("embedding" in c.tablas.huespedes[0]));
+  assert.equal(s.sinHuespedes, undefined);
+  await s.guardarHuespedes([{ ...ficha("u2", "Beto"), embedding: [1, 2] }]);
+  await s.vaciar();
+  assert.equal(c.tablas.huespedes.length, 2);
+  assert.equal(avisos, 1);
+});
+
+test("carga los huéspedes de la nube con su vector", async () => {
+  const c = clienteFalso();
+  const s = new SupabaseStore(c, { intervaloMs: 60000 });
+  c.tablas.huespedes.push({ id: "u1", nombre: "Ana", habitacion: "204", estadia: "3 noches", consentimiento_ts: "2026-10-03T10:00:00+00:00", embedding: [0.5, 0.5] });
+  c.tablas.huespedes.push({ id: "u2", nombre: "Beto", habitacion: "", estadia: "", consentimiento_ts: "2026-10-03T10:00:00+00:00" });
+  const lista = await s.cargarHuespedes();
+  assert.equal(lista[0].uid, "u1");
+  assert.deepEqual(lista[0].embedding, [0.5, 0.5]);
+  assert.equal(lista[1].embedding, null);
+});
+
+test("crea una invitación con un código largo al azar y detecta cuándo se usó", async () => {
+  const c = clienteFalso();
+  const s = new SupabaseStore(c, { intervaloMs: 60000 });
+  const token = await s.crearInvitacion({ nombre: "Ana", habitacion: "204", estadia: "3 noches" });
+  assert.match(token, /^[0-9a-f]{32}$/);
+  assert.notEqual(token, await s.crearInvitacion({ nombre: "Beto" }));
+  assert.equal(c.tablas.invitaciones[0].nombre, "Ana");
+  assert.equal(await s.invitacionUsada(token), false);
+  c.tablas.invitaciones[0].usada = "2026-10-03T10:05:00Z";
+  assert.equal(await s.invitacionUsada(token), true);
 });
 
 test("la atención lleva el huésped y el huésped se envía antes que la atención", async () => {

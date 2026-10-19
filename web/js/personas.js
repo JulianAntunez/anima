@@ -1,6 +1,6 @@
 // Clientes registrados, guardados en este navegador (IndexedDB). No se guardan fotos: únicamente
 // el nombre, los datos de la estadía y un vector numérico de 512 valores, con la fecha del consentimiento.
-// El vector queda solo acá; la ficha sin vector (fichaHuesped) se copia a Supabase para poder consultarla.
+// La ficha (fichaHuesped) se copia a Supabase para poder consultarla y reconocer al cliente desde otros equipos.
 
 const BASE = "anima";
 const TABLA = "personas";
@@ -30,7 +30,7 @@ async function operar(modo, fn) {
 
 export const listarPersonas = () => operar("readonly", (s) => s.getAll()).then((l) => l ?? []);
 
-// Cada cliente lleva un identificador propio (uid) que lo une con su ficha en la nube, que no incluye el vector.
+// Cada cliente lleva un identificador propio (uid) que lo une con su ficha en la nube (tabla huespedes).
 const nuevoUid = () => crypto.randomUUID();
 
 export const agregarPersona = ({ nombre, habitacion, estadia, embedding }) =>
@@ -55,5 +55,42 @@ export async function galeria() {
   return lista.map((p) => ({ ...p, embedding: Float32Array.from(p.embedding) }));
 }
 
-// Datos que viajan a la nube: nunca incluyen el vector facial.
-export const fichaHuesped = (p) => ({ uid: p.uid, nombre: p.nombre, habitacion: p.habitacion || "", estadia: p.estadia || "", consentimiento_ts: p.consentimiento_ts });
+// Trae a este navegador un cliente de la nube (alta o reemplazo por uid). Conserva la fecha de la nube y marca
+// a qué usuario pertenece, para saber más adelante si fue borrado desde otro equipo.
+export async function importarPersona(remota, usuarioId) {
+  const existente = (await listarPersonas()).find((p) => p.uid === remota.uid);
+  const registro = {
+    ...(existente || {}),
+    uid: remota.uid,
+    nombre: remota.nombre,
+    habitacion: remota.habitacion || "",
+    estadia: remota.estadia || "",
+    embedding: Array.from(remota.embedding),
+    consentimiento_ts: remota.consentimiento_ts,
+    nube: usuarioId,
+  };
+  await operar("readwrite", (s) => s.put(registro));
+}
+
+// Marca como sincronizados (presentes en la nube) a los clientes con esos uid.
+export async function marcarEnNube(uids, usuarioId) {
+  const set = new Set(uids);
+  for (const p of (await listarPersonas()).filter((x) => set.has(x.uid) && x.nube !== usuarioId)) {
+    await operar("readwrite", (s) => s.put({ ...p, nube: usuarioId }));
+  }
+}
+
+export async function eliminarPorUid(uid) {
+  const p = (await listarPersonas()).find((x) => x.uid === uid);
+  if (p) await eliminarPersona(p.id);
+}
+
+// Ficha que viaja a la nube. Incluye el vector facial (512 números), nunca fotos.
+export const fichaHuesped = (p) => ({
+  uid: p.uid,
+  nombre: p.nombre,
+  habitacion: p.habitacion || "",
+  estadia: p.estadia || "",
+  consentimiento_ts: p.consentimiento_ts,
+  embedding: p.embedding ? Array.from(p.embedding) : null,
+});

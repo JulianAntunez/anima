@@ -219,3 +219,19 @@ select { background: var(--surface); border: 1px solid var(--line); border-radiu
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* Registro desde el teléfono */
+.movil-qr { display: flex; justify-content: center; margin: 4px 0 14px; }
+.movil-qr svg { width: 220px; height: 220px; background: #fff; padding: 8px; border-radius: var(--radius); border: 1px solid var(--line); }
+
+.pagina-movil { min-height: 100vh; display: flex; justify-content: center; padding: 16px; }
+.movil { width: min(440px, 100%); display: flex; flex-direction: column; gap: 14px; }
+.movil h1 { font-family: var(--serif); font-size: 24px; margin: 0; }
+.movil .card { display: flex; flex-direction: column; gap: 12px; }
+.movil .card p { margin: 0; }
+.movil .escenario { aspect-ratio: 3 / 4; max-height: 62vh; }
+.movil .progreso { height: 8px; border-radius: 4px; background: var(--neutral-bg); overflow: hidden; }
+.movil .progreso i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.movil .ok { color: var(--positivo-fg); background: var(--positivo-bg); padding: 12px; border-radius: var(--radius); }
+.movil .mal { color: var(--alerta-fg); background: var(--alerta-bg); padding: 12px; border-radius: var(--radius); }
+.movil button { padding: 12px 16px; font-size: 16px; }
