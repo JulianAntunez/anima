@@ -83,12 +83,16 @@ export class LocalStore {
 }
 
 // Guarda en Supabase con la misma interfaz que LocalStore. Los inserts se agrupan cada 5 s.
+// Columnas de huespedes que se agregaron después y pueden faltar si no se ejecutó el SQL correspondiente.
+const COLUMNAS_OPCIONALES = ["embedding", "actualizado"];
+
 export class SupabaseStore {
   constructor(client, { intervaloMs = 5000 } = {}) {
     this.client = client;
     this.intervaloMs = intervaloMs;
     this.nombre = "Supabase (nube)";
     this.cola = { huespedes: [], borrados: [], registros: [], episodios: [] };
+    this.sinColumna = new Set(); // columnas opcionales que la base todavía no tiene (SQL sin ejecutar)
     this.timer = null;
     this.onError = null;
   }
@@ -106,6 +110,7 @@ export class SupabaseStore {
         consentimiento_ts: h.consentimiento_ts || new Date().toISOString(),
       };
       if (h.embedding?.length) fila.embedding = Array.from(h.embedding);
+      if (h.actualizado) fila.actualizado = h.actualizado;
       this.cola.huespedes.push(fila);
     }
     if (lista.length) this._programar();
@@ -164,13 +169,10 @@ export class SupabaseStore {
         pendiente.borrados = [];
       }
       if (pendiente.huespedes.length) {
-        const subir = (filas) => this.client.from("huespedes").upsert(filas, { onConflict: "id" });
-        const sinVector = (filas) => filas.map(({ embedding, ...resto }) => resto);
-        let { error } = await subir(this.sinVector ? sinVector(pendiente.huespedes) : pendiente.huespedes);
-        if (error && this._faltaVector(error)) {
-          // Si todavía no se ejecutó registro_movil.sql, se guardan las fichas sin el vector.
-          ({ error } = await subir(sinVector(pendiente.huespedes)));
-        }
+        const subir = () => this.client.from("huespedes").upsert(this._sinColumnas(pendiente.huespedes), { onConflict: "id" });
+        let { error } = await subir();
+        // Si todavía no se ejecutó algún SQL nuevo, se guardan las fichas sin esa columna.
+        for (let i = 0; error && i < COLUMNAS_OPCIONALES.length && this._faltaColumna(error); i++) ({ error } = await subir());
         if (error && !this._esquemaViejo(error)) throw error;
         if (error) pendiente.borrados = [];
         pendiente.huespedes = [];
@@ -201,26 +203,45 @@ export class SupabaseStore {
     }
   }
 
-  _faltaVector(error) {
+  _faltaColumna(error) {
     const texto = `${error?.message || ""} ${error?.details || ""}`;
-    const falta = /embedding/i.test(texto) && (["PGRST204", "42703"].includes(error?.code) || /column|schema cache|does not exist/i.test(texto));
-    if (falta && !this.sinVector) {
-      this.sinVector = true;
-      this.onSinVector?.();
-    }
-    return falta;
+    const col = COLUMNAS_OPCIONALES.find((c) => new RegExp(c, "i").test(texto));
+    const falta = col && (["PGRST204", "42703"].includes(error?.code) || /column|schema cache|does not exist/i.test(texto));
+    if (!falta || this.sinColumna.has(col)) return false;
+    this.sinColumna.add(col);
+    this.onSinColumna?.(col);
+    return true;
+  }
+
+  _sinColumnas(filas) {
+    return filas.map((f) => {
+      const copia = { ...f };
+      for (const c of this.sinColumna) delete copia[c];
+      return copia;
+    });
   }
 
   // Clientes guardados en la nube, con su vector facial (null si la columna todavía no existe).
   async cargarHuespedes() {
-    const columnas = "id,nombre,habitacion,estadia,consentimiento_ts";
-    let { data, error } = await this.client.from("huespedes").select(this.sinVector ? columnas : `${columnas},embedding`).range(0, 4999);
-    if (error && !this.sinVector && this._faltaVector(error)) ({ data, error } = await this.client.from("huespedes").select(columnas).range(0, 4999));
+    const consulta = () => {
+      const columnas = ["id", "nombre", "habitacion", "estadia", "consentimiento_ts", ...COLUMNAS_OPCIONALES.filter((c) => !this.sinColumna.has(c))];
+      return this.client.from("huespedes").select(columnas.join(",")).range(0, 4999);
+    };
+    let { data, error } = await consulta();
+    for (let i = 0; error && i < COLUMNAS_OPCIONALES.length && this._faltaColumna(error); i++) ({ data, error } = await consulta());
     if (error) {
       if (this._esquemaViejo(error)) return [];
       throw error;
     }
-    return data.map((x) => ({ uid: x.id, nombre: x.nombre, habitacion: x.habitacion, estadia: x.estadia, consentimiento_ts: x.consentimiento_ts, embedding: x.embedding ?? null }));
+    return data.map((x) => ({
+      uid: x.id,
+      nombre: x.nombre,
+      habitacion: x.habitacion,
+      estadia: x.estadia,
+      consentimiento_ts: x.consentimiento_ts,
+      actualizado: x.actualizado ?? null,
+      embedding: x.embedding ?? null,
+    }));
   }
 
   // Invitación de un solo uso para que el huésped se registre desde su teléfono (vence a los 15 minutos).

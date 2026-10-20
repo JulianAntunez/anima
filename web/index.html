@@ -126,12 +126,13 @@
           <div class="botones">
             <button type="button" id="btn-abrir-cliente"><i class="ti ti-device-desktop" aria-hidden="true"></i>Abrir pantalla del cliente</button>
             <button type="submit" class="primario"><i class="ti ti-send" aria-hidden="true"></i>Mostrar al cliente</button>
+            <button type="button" id="btn-guardar-cliente" hidden title="Guarda los cambios en la ficha del cliente reconocido"><i class="ti ti-device-floppy" aria-hidden="true"></i>Guardar cambios</button>
             <button type="button" id="btn-limpiar-cliente"><i class="ti ti-eraser" aria-hidden="true"></i>Limpiar</button>
           </div>
           <p id="cli-estado" class="estado-cli" role="status"></p>
 
           <div class="reconocimiento">
-            <p class="estado-cli" style="margin:0 0 8px">Reconocimiento automático: tildá el consentimiento y apretá <strong>Registrar cliente</strong> una vez. Después lo identifica solo.</p>
+            <p class="estado-cli" style="margin:0 0 8px">Reconocimiento automático: tildá el consentimiento y apretá <strong>Registrar cliente</strong> una vez. Después lo identifica solo y carga sus datos; si los corregís, apretá <strong>Guardar cambios</strong>.</p>
             <label class="consent consent-chico">
               <input type="checkbox" id="cli-consent">
               <span>El cliente acepta que se guarden su nombre, los datos de su estadía y un vector numérico de su rostro (sin fotos) en la base del hotel.</span>

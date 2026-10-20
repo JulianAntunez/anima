@@ -1,7 +1,7 @@
 // Decide qué copiar entre los clientes de este navegador y los de la nube (sin dependencias de navegador).
 //
-// locales:  [{ uid, nombre, consentimiento_ts, nube? }]          nube = id del usuario con el que se sincronizó
-// remotos:  [{ uid, nombre, consentimiento_ts, embedding|null }]
+// locales:  [{ uid, nombre, consentimiento_ts, actualizado?, nube? }]   nube = id del usuario con el que se sincronizó
+// remotos:  [{ uid, nombre, consentimiento_ts, actualizado?, embedding|null }]
 // Devuelve { descargar, subir, borrarLocal, marcar }
 //
 // Reglas:
@@ -9,6 +9,9 @@
 //  - Está en los dos: gana el de fecha más nueva.
 //  - Está acá y no en la nube: si ya se había sincronizado con este usuario, lo borraron desde otro equipo y se
 //    borra acá; si nunca se sincronizó, se sube. Los de otro usuario no se tocan.
+
+// Fecha de la última vez que cambió la ficha: el consentimiento o la última corrección de datos, lo más reciente.
+const marca = (x) => Math.max(Date.parse(x.consentimiento_ts) || 0, Date.parse(x.actualizado) || 0);
 
 export function planificarSincronia(locales, remotos, usuarioId) {
   const descargar = [];
@@ -29,8 +32,8 @@ export function planificarSincronia(locales, remotos, usuarioId) {
       descargar.push(r);
       continue;
     }
-    const tr = Date.parse(r.consentimiento_ts);
-    const tl = Date.parse(l.consentimiento_ts);
+    const tr = marca(r);
+    const tl = marca(l);
     if (tr > tl) descargar.push(r);
     else if (tl > tr) subir.push(l);
     else if (l.nube !== usuarioId) marcar.push(l.uid);

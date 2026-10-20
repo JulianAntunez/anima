@@ -55,7 +55,17 @@ test("una ficha de la nube sin vector y sin copia local se ignora", () => {
   assert.deepEqual(p, { descargar: [], subir: [], borrarLocal: [], marcar: [] });
 });
 
-test("fechas ilegibles no provocan descargas ni subidas", () => {
-  const p = planificarSincronia([local("a", "t")], [remoto("a")], U);
-  assert.equal(p.descargar.length + p.subir.length, 0);
+test("una corrección de datos posterior gana aunque el consentimiento sea el mismo", () => {
+  const consentimiento = "2026-10-03T10:00:00Z";
+  const corregidoAca = { ...local("a", consentimiento, U), actualizado: "2026-10-04T09:00:00Z" };
+  assert.deepEqual(planificarSincronia([corregidoAca], [remoto("a", consentimiento)], U).subir.map((x) => x.uid), ["a"]);
+  const corregidoAllá = { ...remoto("a", consentimiento), actualizado: "2026-10-04T09:00:00Z" };
+  assert.deepEqual(planificarSincronia([local("a", consentimiento, U)], [corregidoAllá], U).descargar.map((x) => x.uid), ["a"]);
+});
+
+test("con fechas ilegibles en los dos lados no se copia nada; si solo la local es ilegible gana la nube", () => {
+  const ambas = planificarSincronia([local("a", "t")], [remoto("a", "x")], U);
+  assert.equal(ambas.descargar.length + ambas.subir.length, 0);
+  const soloLocal = planificarSincronia([local("a", "t")], [remoto("a")], U);
+  assert.deepEqual(soloLocal.descargar.map((x) => x.uid), ["a"]);
 });

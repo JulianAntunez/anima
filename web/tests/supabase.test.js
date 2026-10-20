@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { SupabaseStore } from "../js/store.js";
 
 // falla: { tabla: error } hace fallar los insert/upsert/delete de esa tabla.
-function clienteFalso({ falla = false, fallaEn = {}, sinColumnaHuesped = false, sinColumnaVector = false } = {}) {
+function clienteFalso({ falla = false, fallaEn = {}, sinColumnaHuesped = false, sinColumnaVector = false, sinColumnaActualizado = false } = {}) {
   const tablas = { registros: [], episodios: [], huespedes: [], invitaciones: [] };
   const llamadas = [];
   const error = (nombre) => (falla ? new Error("sin red") : fallaEn[nombre] || null);
@@ -24,6 +24,9 @@ function clienteFalso({ falla = false, fallaEn = {}, sinColumnaHuesped = false, 
         if (e) return { error: e };
         if (nombre === "huespedes" && sinColumnaVector && f.some((x) => "embedding" in x)) {
           return { error: { code: "PGRST204", message: "Could not find the 'embedding' column of 'huespedes' in the schema cache" } };
+        }
+        if (nombre === "huespedes" && sinColumnaActualizado && f.some((x) => "actualizado" in x)) {
+          return { error: { code: "PGRST204", message: "Could not find the 'actualizado' column of 'huespedes' in the schema cache" } };
         }
         for (const fila of f) {
           const i = tablas[nombre].findIndex((x) => x.id === fila.id);
@@ -119,7 +122,7 @@ test("si falta la columna del vector, guarda la ficha sin vector y avisa una vez
   const c = clienteFalso({ sinColumnaVector: true });
   const s = new SupabaseStore(c, { intervaloMs: 60000 });
   let avisos = 0;
-  s.onSinVector = () => avisos++;
+  s.onSinColumna = () => avisos++;
   await s.guardarHuespedes([{ ...ficha("u1", "Ana"), embedding: [1, 2] }]);
   await s.vaciar();
   assert.equal(c.tablas.huespedes.length, 1);
@@ -217,4 +220,27 @@ test("sin ejecutar huespedes.sql sigue guardando atenciones y avisa una sola vez
   await s.vaciar();
   assert.equal(c.tablas.episodios.length, 2);
   assert.equal(avisos, 1);
+});
+
+test("envía la fecha de corrección de datos y la trae de la nube", async () => {
+  const c = clienteFalso();
+  const s = new SupabaseStore(c, { intervaloMs: 60000 });
+  await s.guardarHuespedes([{ ...ficha("u1", "Ana"), embedding: [1, 2], actualizado: "2026-10-04T09:00:00.000Z" }]);
+  await s.vaciar();
+  assert.equal(c.tablas.huespedes[0].actualizado, "2026-10-04T09:00:00.000Z");
+  assert.equal((await s.cargarHuespedes())[0].actualizado, "2026-10-04T09:00:00.000Z");
+});
+
+test("si falta la columna de corrección, la corrección de nombre igual llega y se avisa una vez", async () => {
+  const c = clienteFalso({ sinColumnaActualizado: true });
+  const s = new SupabaseStore(c, { intervaloMs: 60000 });
+  const columnas = [];
+  s.onSinColumna = (col) => columnas.push(col);
+  await s.guardarHuespedes([{ ...ficha("u1", "Ana Corregida"), embedding: [1, 2], actualizado: "2026-10-04T09:00:00.000Z" }]);
+  await s.vaciar();
+  assert.equal(c.tablas.huespedes[0].nombre, "Ana Corregida");
+  assert.deepEqual(c.tablas.huespedes[0].embedding, [1, 2]);
+  assert.ok(!("actualizado" in c.tablas.huespedes[0]));
+  assert.equal(s.sinHuespedes, undefined);
+  assert.deepEqual(columnas, ["actualizado"]);
 });

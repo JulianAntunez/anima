@@ -39,6 +39,15 @@ export const agregarPersona = ({ nombre, habitacion, estadia, embedding }) =>
 export const actualizarPersona = (persona) =>
   operar("readwrite", (s) => s.put({ ...persona, uid: persona.uid || nuevoUid(), embedding: Array.from(persona.embedding), consentimiento_ts: new Date().toISOString() }));
 
+// Corrige nombre, habitación y estadía sin tocar el vector ni la fecha del consentimiento.
+export async function corregirDatosPersona(id, { nombre, habitacion, estadia }) {
+  const p = (await listarPersonas()).find((x) => x.id === id);
+  if (!p) return null;
+  const nueva = { ...p, nombre, habitacion, estadia, actualizado: new Date().toISOString() };
+  await operar("readwrite", (s) => s.put(nueva));
+  return nueva;
+}
+
 export const eliminarPersona = (id) => operar("readwrite", (s) => s.delete(id));
 
 export const borrarPersonas = () => operar("readwrite", (s) => s.clear());
@@ -67,6 +76,7 @@ export async function importarPersona(remota, usuarioId) {
     estadia: remota.estadia || "",
     embedding: Array.from(remota.embedding),
     consentimiento_ts: remota.consentimiento_ts,
+    actualizado: remota.actualizado || null,
     nube: usuarioId,
   };
   await operar("readwrite", (s) => s.put(registro));
@@ -92,5 +102,6 @@ export const fichaHuesped = (p) => ({
   habitacion: p.habitacion || "",
   estadia: p.estadia || "",
   consentimiento_ts: p.consentimiento_ts,
+  actualizado: p.actualizado || null,
   embedding: p.embedding ? Array.from(p.embedding) : null,
 });

@@ -8,7 +8,7 @@ import { CANAL, datosCliente } from "./canal.js";
 import { cargarReconocedor, embeddingDe } from "./reconocimiento.js";
 import { buscar, promediar as promediarEmbeddings, decidirIdentidad } from "./reconocer.js";
 import { asociarCaras, principalDe } from "./seguimiento.js";
-import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas, fichaHuesped, importarPersona, marcarEnNube, eliminarPorUid } from "./personas.js";
+import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas, fichaHuesped, importarPersona, marcarEnNube, eliminarPorUid, corregirDatosPersona } from "./personas.js";
 import { planificarSincronia } from "./sincronia.js";
 
 const $ = (id) => document.getElementById(id);
@@ -88,6 +88,7 @@ function publicarCliente() {
   datosActuales = datosCliente({ nombre: $("cli-in-nombre").value, habitacion: $("cli-in-hab").value, estadia: $("cli-in-estadia").value });
   canal?.postMessage(datosActuales);
   $("cli-estado").textContent = datosActuales.nombre ? `Mostrando a ${datosActuales.nombre} en la pantalla del cliente.` : "Pantalla del cliente sin nombre.";
+  actualizarBotonGuardar();
 }
 
 function mostrarAlCliente(e) {
@@ -104,6 +105,7 @@ function limpiarCliente(texto = "Datos del cliente borrados.") {
   datosActuales = datosCliente();
   canal?.postMessage(datosActuales);
   $("cli-estado").textContent = texto;
+  actualizarBotonGuardar();
 }
 
 /* ---------- reconocimiento de clientes (vectores solo en este navegador) ---------- */
@@ -149,6 +151,41 @@ async function quitarFichas(personas) {
 }
 
 const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// "Guardar cambios" aparece cuando hay un cliente reconocido y lo escrito difiere de su ficha.
+function datosDelFormulario() {
+  return { nombre: $("cli-in-nombre").value.trim(), habitacion: $("cli-in-hab").value.trim(), estadia: $("cli-in-estadia").value.trim() };
+}
+
+function actualizarBotonGuardar() {
+  const boton = $("btn-guardar-cliente");
+  const p = rec.persona;
+  boton.hidden = !p;
+  if (!p) return;
+  const d = datosDelFormulario();
+  boton.disabled = d.nombre === p.nombre && d.habitacion === (p.habitacion || "") && d.estadia === (p.estadia || "");
+}
+
+async function guardarCambios() {
+  const p = rec.persona;
+  if (!p) return avisarRegistro("No hay un cliente reconocido para corregir.");
+  const datos = datosDelFormulario();
+  if (!datos.nombre) return avisarRegistro("El nombre no puede quedar vacío.");
+  if (rec.galeria.some((x) => x.id !== p.id && x.nombre.toLowerCase() === datos.nombre.toLowerCase())) {
+    return avisarRegistro(`Ya hay otro cliente registrado como ${datos.nombre}.`);
+  }
+  await corregirDatosPersona(p.id, datos);
+  await recargarGaleria();
+  const actual = rec.galeria.find((x) => x.id === p.id) || null;
+  rec.persona = actual;
+  estado.caras.forEach((c) => {
+    if (c.persona?.id === p.id) c.persona = actual;
+  });
+  if (actual) enviarFichas([actual]);
+  estadoRec();
+  publicarCliente();
+  avisarRegistro(`Datos de ${datos.nombre} actualizados.`);
+}
 
 const nombreDeHuesped = (uid) => (uid ? rec.galeria.find((p) => p.uid === uid)?.nombre || "" : "");
 
@@ -363,6 +400,7 @@ function sinRostroReconocimiento() {
     rec.persona = null;
     rec.vistoDesdeCarga = false;
     if (hayDatos) limpiarCliente("El cliente se retiró.");
+    actualizarBotonGuardar();
   }
 }
 
@@ -1156,6 +1194,8 @@ async function entrar(modo) {
   } else if (cliente && usuario) {
     estado.store = new SupabaseStore(cliente);
     estado.store.onError = () => aviso("No se pudieron enviar los datos a Supabase. Se reintentará.", 4000);
+    estado.store.onSinColumna = (col) =>
+      aviso(col === "actualizado" ? "Falta ejecutar datos_huesped.sql en Supabase para sincronizar las correcciones de datos." : "Falta ejecutar registro_movil.sql en Supabase para guardar el vector facial en la nube.", 8000);
     estado.store.onEsquemaViejo = () => aviso("Falta ejecutar huespedes.sql en Supabase para guardar los huéspedes. Mientras tanto se guarda todo lo demás.", 8000);
   } else {
     estado.store = new LocalStore();
@@ -1206,6 +1246,8 @@ $("btn-registrar-cliente").addEventListener("click", iniciarRegistro);
 $("btn-olvidar-cliente").addEventListener("click", olvidarCliente);
 $("btn-borrar-registrados").addEventListener("click", borrarRegistrados);
 $("btn-movil").addEventListener("click", abrirRegistroMovil);
+$("btn-guardar-cliente").addEventListener("click", guardarCambios);
+for (const id of ["cli-in-nombre", "cli-in-hab", "cli-in-estadia"]) $(id).addEventListener("input", actualizarBotonGuardar);
 $("movil-copiar").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText($("movil-link").value);
