@@ -122,6 +122,7 @@ select { background: var(--surface); border: 1px solid var(--line); border-radiu
 .caja.tono-atencion .chip { background: var(--atencion-fill); color: #2b1d00; }
 .caja.tono-alerta .chip { background: var(--alerta-fill); }
 
+.chip.dentro { bottom: auto; top: 4px; left: 4px; margin: 0; font-size: 13px; }
 .extras { position: absolute; inset: 0; pointer-events: none; }
 .presentes { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
 .lectura { display: flex; flex-direction: column; gap: 10px; }
@@ -183,9 +184,7 @@ select { background: var(--surface); border: 1px solid var(--line); border-radiu
 .cli-cuerpo { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; align-items: center; flex: 1; }
 .cli-escenario { border-radius: 18px; }
 .cli-animo { padding: 32px 24px; text-align: center; align-items: center; gap: 10px; border-radius: 18px; }
-.cli-icono { font-size: 72px; }
-.cli-animo .a-nombre { font-size: clamp(32px, 4vw, 46px); }
-.cli-mensaje { font-size: 18px; }
+.cli-emoji { font-size: clamp(96px, 16vw, 168px); line-height: 1.1; transition: transform .2s; }
 .cli-acciones { text-align: center; }
 .cli-privacidad { display: flex; justify-content: center; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin: 0; }
 @media (max-width: 760px) { .cli-cuerpo { grid-template-columns: minmax(0, 1fr); } }

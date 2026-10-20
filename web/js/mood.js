@@ -66,18 +66,19 @@ export function tonoDe(emocion) {
   return animoDe(emocion).tono;
 }
 
-// Lo que ve el cliente en su pantalla: lenguaje amable y sin etiquetas negativas.
-// Los estados de alerta se muestran con el mismo color que "atención" y un mensaje de ayuda.
+// Lo que ve el cliente en su pantalla: un emoji grande de su expresión y colores sin alarma.
+// "nombre" y "mensaje" ya no se muestran; quedan como texto accesible (lectores de pantalla) y para el panel.
+// Los estados de alerta se muestran con el mismo color que "atención".
 export const CLIENTE = {
-  feliz: { nombre: "Buen ánimo", icono: "mood-smile", tono: "positivo", mensaje: "Nos alegra verte de buen ánimo." },
-  neutral: { nombre: "Tranquilidad", icono: "mood-neutral", tono: "neutral", mensaje: "Te damos la bienvenida. Estamos para ayudarte." },
-  sorprendido: { nombre: "Curiosidad", icono: "mood-surprised", tono: "atencion", mensaje: "¿Tenés alguna duda? Contanos y con gusto te ayudamos." },
-  triste: { nombre: "Preocupación", icono: "mood-sad", tono: "atencion", mensaje: "Estamos para ayudarte. Contanos qué necesitás." },
-  miedo: { nombre: "Inquietud", icono: "mood-nervous", tono: "atencion", mensaje: "Quedate tranquilo, vamos a ayudarte." },
-  enojado: { nombre: "Impaciencia", icono: "clock", tono: "atencion", mensaje: "Gracias por tu paciencia, enseguida te atendemos." },
-  asco: { nombre: "Impaciencia", icono: "clock", tono: "atencion", mensaje: "Gracias por tu paciencia, enseguida te atendemos." },
-  incierto: { nombre: "Un momento", icono: "mood-neutral", tono: "neutral", mensaje: "Un momento, por favor." },
-  ninguno: { nombre: "Bienvenido", icono: "user", tono: "neutral", mensaje: "Acercate al mostrador, enseguida te atendemos." },
+  feliz: { nombre: "Buen ánimo", emoji: "😊", icono: "mood-smile", tono: "positivo", mensaje: "Nos alegra verte de buen ánimo." },
+  neutral: { nombre: "Tranquilidad", emoji: "🙂", icono: "mood-neutral", tono: "neutral", mensaje: "Te damos la bienvenida. Estamos para ayudarte." },
+  sorprendido: { nombre: "Curiosidad", emoji: "😮", icono: "mood-surprised", tono: "atencion", mensaje: "¿Tenés alguna duda? Contanos y con gusto te ayudamos." },
+  triste: { nombre: "Preocupación", emoji: "😟", icono: "mood-sad", tono: "atencion", mensaje: "Estamos para ayudarte. Contanos qué necesitás." },
+  miedo: { nombre: "Inquietud", emoji: "😨", icono: "mood-nervous", tono: "atencion", mensaje: "Quedate tranquilo, vamos a ayudarte." },
+  enojado: { nombre: "Impaciencia", emoji: "😠", icono: "clock", tono: "atencion", mensaje: "Gracias por tu paciencia, enseguida te atendemos." },
+  asco: { nombre: "Impaciencia", emoji: "😖", icono: "clock", tono: "atencion", mensaje: "Gracias por tu paciencia, enseguida te atendemos." },
+  incierto: { nombre: "Un momento", emoji: "🤔", icono: "mood-neutral", tono: "neutral", mensaje: "Un momento, por favor." },
+  ninguno: { nombre: "Bienvenido", emoji: "👋", icono: "user", tono: "neutral", mensaje: "Acercate al mostrador, enseguida te atendemos." },
 };
 
 export function animoCliente(emocion) {

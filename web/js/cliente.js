@@ -37,7 +37,7 @@ function pintarOtras(otras) {
     el.style.top = `${o.caja.y * 100}%`;
     el.style.width = `${o.caja.w * 100}%`;
     el.style.height = `${o.caja.h * 100}%`;
-    el.firstChild.textContent = o.nombre || a.nombre;
+    el.firstChild.textContent = o.nombre ? `${o.nombre} ${a.emoji}` : a.emoji;
   });
   const nombres = lista.map((o) => o.nombre).filter(Boolean);
   $("cli-grupo").textContent = nombres.length ? `También en el mostrador: ${nombres.join(", ")}` : "";
@@ -46,9 +46,9 @@ function pintarOtras(otras) {
 function pintar(emocion, caja) {
   const a = animoCliente(emocion);
   $("cli-animo").className = `animo cli-animo tono-${a.tono}`;
-  $("cli-icono").className = `ti ti-${a.icono} cli-icono`;
-  $("cli-nombre").textContent = a.nombre;
-  $("cli-mensaje").textContent = a.mensaje;
+  const emoji = $("cli-emoji");
+  emoji.textContent = a.emoji;
+  emoji.setAttribute("aria-label", a.nombre);
 
   const el = $("cli-caja");
   if (caja && !st.ocultar) {

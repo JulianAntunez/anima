@@ -18,11 +18,17 @@ test("datosCliente arma el mensaje con límites por campo", () => {
   assert.equal(CANAL, "anima-cliente");
 });
 
-test("el cliente tiene mensaje para todas las expresiones y para 'sin cliente'", () => {
+test("el cliente tiene emoji y texto accesible para todas las expresiones y para 'sin cliente'", () => {
   for (const e of [...ETIQUETAS, "incierto", "ninguno"]) {
     const a = animoCliente(e);
     assert.ok(a.nombre && a.mensaje && a.icono, e);
+    assert.ok(a.emoji && [...a.emoji].length === 1, `${e}: un solo emoji`);
   }
+});
+
+test("cada expresión tiene un emoji distinto, salvo las que comparten tono", () => {
+  const emojis = ETIQUETAS.map((e) => animoCliente(e).emoji);
+  assert.equal(new Set(emojis).size, ETIQUETAS.length);
 });
 
 test("la pantalla del cliente nunca usa colores ni palabras de alerta", () => {

@@ -169,7 +169,11 @@ async function enviar() {
     if (!data) return invalido("Este enlace venció o ya se usó. Pedile a la recepción un código nuevo.");
     vector = null;
     $("m-final").className = "ok";
-    $("m-final").textContent = "¡Listo! Ya estás registrado. Podés cerrar esta página.";
+    $("m-final").textContent = "¡Listo! Ya estás registrado. Podés cerrar esta página o ver tu expresión en tu teléfono.";
+    $("m-ver").hidden = false;
+    $("m-ver").onclick = () => {
+      location.href = `mi-animo.html#n=${encodeURIComponent($("m-nombre").textContent)}`;
+    };
   } catch {
     fallo("No se pudo guardar tu registro. Revisá tu conexión.", enviar);
   }

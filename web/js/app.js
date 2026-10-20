@@ -205,6 +205,18 @@ async function cargarQR() {
   return globalThis.qrcode;
 }
 
+async function dibujarQR(texto) {
+  $("movil-qr").innerHTML = "";
+  try {
+    const qr = (await cargarQR())(0, "M");
+    qr.addData(texto);
+    qr.make();
+    $("movil-qr").innerHTML = qr.createSvgTag(5, 2);
+  } catch {
+    $("movil-qr").textContent = "No se pudo dibujar el código QR. Copiá el enlace.";
+  }
+}
+
 async function abrirRegistroMovil() {
   if (!estado.store?.crearInvitacion || !usuario) return avisarRegistro("Registrar desde el teléfono requiere iniciar sesión con Supabase.");
   const nombre = $("cli-in-nombre").value.trim();
@@ -221,15 +233,7 @@ async function abrirRegistroMovil() {
   $("movil-link").value = url.href;
   $("movil-sub").textContent = `Pedile a ${nombre} que escanee el código con su teléfono. Vence en 15 minutos.`;
   $("movil-estado").textContent = "Esperando que el cliente complete el registro…";
-  $("movil-qr").innerHTML = "";
-  try {
-    const qr = (await cargarQR())(0, "M");
-    qr.addData(url.href);
-    qr.make();
-    $("movil-qr").innerHTML = qr.createSvgTag(5, 2);
-  } catch {
-    $("movil-qr").textContent = "No se pudo dibujar el código QR. Copiá el enlace.";
-  }
+  await dibujarQR(url.href);
   $("dlg-movil").showModal();
 
   clearInterval(temporizadorMovil);
@@ -246,7 +250,13 @@ async function abrirRegistroMovil() {
       return;
     }
     clearInterval(temporizadorMovil);
+    // Con el registro hecho, el código pasa a mostrar la pantalla del cliente en su propio teléfono.
+    const animo = new URL("mi-animo.html", location.href);
+    animo.hash = `n=${encodeURIComponent(nombre)}`;
+    $("movil-link").value = animo.href;
+    $("movil-sub").textContent = `Listo. Con este código nuevo, ${nombre} ve su cámara con su nombre y su estado de ánimo en su teléfono.`;
     $("movil-estado").textContent = `✓ ${nombre} quedó registrado desde su teléfono.`;
+    await dibujarQR(animo.href);
     await sincronizarNube();
     aviso(`Cliente registrado desde su teléfono: ${nombre}`, 4000);
   }, 3000);

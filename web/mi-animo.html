@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <title>Ánima · Mi expresión</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="pantalla-cliente">
+<main class="cli">
+  <header class="cli-marca">
+    <i class="ti ti-building-skyscraper" aria-hidden="true"></i>
+    <span>Ánima · Hospitalidad que se anticipa</span>
+  </header>
+
+  <section class="cli-saludo">
+    <h1 id="cli-saludo">Hola</h1>
+  </section>
+
+  <section class="cli-cuerpo">
+    <div class="escenario cli-escenario" id="cli-escenario">
+      <video id="cli-video" playsinline muted></video>
+      <div id="cli-placeholder" class="placeholder"><i class="ti ti-camera" aria-hidden="true"></i><span id="cli-placeholder-texto">Activando la cámara…</span></div>
+      <div id="cli-caja" class="caja" hidden><span id="cli-chip" class="chip dentro"></span></div>
+    </div>
+
+    <div id="cli-animo" class="animo cli-animo tono-neutral" aria-live="polite">
+      <span id="cli-emoji" class="cli-emoji" role="img" aria-label="Sin rostro">👋</span>
+    </div>
+  </section>
+
+  <div class="cli-acciones">
+    <button id="btn-reintentar" class="primario" hidden><i class="ti ti-camera" aria-hidden="true"></i><span>Activar la cámara</span></button>
+  </div>
+
+  <p class="cli-privacidad"><i class="ti ti-lock" aria-hidden="true"></i>Tu imagen no se guarda ni sale de tu teléfono. Solo se muestra tu expresión en este momento.</p>
+</main>
+
+<script type="module" src="js/mi-animo.js"></script>
+</body>
+</html>
