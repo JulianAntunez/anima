@@ -11,7 +11,9 @@ const MUESTRAS = 10;
 const ENTRE_MUESTRAS_MS = 350;
 
 const $ = (id) => document.getElementById(id);
-const token = new URLSearchParams(location.hash.slice(1)).get("t");
+const parametros = new URLSearchParams(location.hash.slice(1));
+const token = parametros.get("t");
+const sala = /^[0-9a-f]{32}$/.test(parametros.get("s") || "") ? parametros.get("s") : null;
 
 let cliente = null;
 let stream = null;
@@ -172,7 +174,7 @@ async function enviar() {
     $("m-final").textContent = "¡Listo! Ya estás registrado. Podés cerrar esta página o ver tu expresión en tu teléfono.";
     $("m-ver").hidden = false;
     $("m-ver").onclick = () => {
-      location.href = `mi-animo.html#n=${encodeURIComponent($("m-nombre").textContent)}`;
+      location.href = `mi-animo.html#n=${encodeURIComponent($("m-nombre").textContent)}${sala ? `&s=${sala}` : ""}`;
     };
   } catch {
     fallo("No se pudo guardar tu registro. Revisá tu conexión.", enviar);

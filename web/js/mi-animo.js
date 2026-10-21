@@ -4,21 +4,61 @@
 import { probabilidades, promediar, ganadora } from "./emotion.js";
 import { animoCliente } from "./mood.js";
 import { limpiarTexto } from "./canal.js";
+import { CONFIG } from "./config.js";
+import { SALA_RE } from "./sala.js";
 
 const MEDIAPIPE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+const SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+const MS_LATIDO = 1000; // mientras la pantalla está abierta se avisa a la recepción cada tanto, aunque no cambie la emoción
 const VENTANA = 4;
 const NEUTRAL_BIAS = 0.6;
 const MS_ENTRE_LECTURAS = 80;
 const MS_SIN_ROSTRO = 700;
 
 const $ = (id) => document.getElementById(id);
-const nombre = limpiarTexto(new URLSearchParams(location.hash.slice(1)).get("n") || "");
+const parametros = new URLSearchParams(location.hash.slice(1));
+const nombre = limpiarTexto(parametros.get("n") || "");
+const sala = SALA_RE.test(parametros.get("s") || "") ? parametros.get("s") : null;
+const miId = crypto.randomUUID();
 
 let stream = null;
 let activo = false;
 let landmarker = null;
 
 $("cli-saludo").textContent = nombre ? `Hola, ${nombre}` : "Hola";
+
+// Comparte con la recepción el nombre y la emoción del momento. Es opcional: si falla, la pantalla sigue andando.
+let canal = null;
+let suscripto = false;
+let ultimaEmocion = null;
+let ultimoEnvio = 0;
+
+async function conectarSala() {
+  if (!sala) return;
+  try {
+    const { createClient } = await import(SUPABASE_JS);
+    const cliente = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    canal = cliente.channel(`sala-${sala}`, { config: { broadcast: { self: false } } });
+    canal.subscribe((estado) => {
+      suscripto = estado === "SUBSCRIBED";
+    });
+  } catch {
+    canal = null;
+  }
+}
+
+function compartir(emocion, confianza = 0) {
+  if (!canal || !suscripto) return;
+  const ahora = Date.now();
+  if (emocion === ultimaEmocion && ahora - ultimoEnvio < MS_LATIDO) return;
+  ultimaEmocion = emocion;
+  ultimoEnvio = ahora;
+  Promise.resolve(canal.send({ type: "broadcast", event: "lectura", payload: { id: miId, nombre, emocion, confianza: Math.round(confianza * 100) / 100 } })).catch(() => {});
+}
+
+function despedirse() {
+  if (canal && suscripto) Promise.resolve(canal.send({ type: "broadcast", event: "adios", payload: { id: miId } })).catch(() => {});
+}
 
 function pintar(emocion, caja) {
   const a = animoCliente(emocion);
@@ -124,10 +164,13 @@ async function iniciar() {
             ymax = Math.max(ymax, p.y);
           }
           // el video se muestra en espejo: se invierte la X
-          pintar(ganadora(promediar(historial)).emocion, { x: 1 - xmax, y: ymin, w: xmax - xmin, h: ymax - ymin });
+          const g = ganadora(promediar(historial));
+          pintar(g.emocion, { x: 1 - xmax, y: ymin, w: xmax - xmin, h: ymax - ymin });
+          compartir(g.emocion, g.confianza);
         } else if (ahora - ultimoRostro > MS_SIN_ROSTRO) {
           historial.length = 0;
           pintar("ninguno", null);
+          compartir("ninguno");
         }
       } catch {
         /* un cuadro que falla se ignora */
@@ -139,6 +182,10 @@ async function iniciar() {
 }
 
 $("btn-reintentar").addEventListener("click", iniciar);
-window.addEventListener("pagehide", detener);
+window.addEventListener("pagehide", () => {
+  despedirse();
+  detener();
+});
 
+conectarSala();
 iniciar();

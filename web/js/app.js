@@ -1,5 +1,5 @@
 import { probabilidades, promediar, ganadora, reposoDesdeMuestras } from "./emotion.js";
-import { animoDe, tonoDe, TONOS } from "./mood.js";
+import { animoDe, animoCliente, tonoDe, TONOS } from "./mood.js";
 import { Sesion } from "./sesion.js";
 import { LocalStore, SupabaseStore, resumir, porHora, aCSV, dia } from "./store.js";
 import { construirInforme } from "./informe.js";
@@ -10,6 +10,7 @@ import { buscar, promediar as promediarEmbeddings, decidirIdentidad } from "./re
 import { asociarCaras, principalDe } from "./seguimiento.js";
 import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas, fichaHuesped, importarPersona, marcarEnNube, eliminarPorUid, corregirDatosPersona } from "./personas.js";
 import { planificarSincronia } from "./sincronia.js";
+import { nuevaSala, SALA_RE, Conectados } from "./sala.js";
 
 const $ = (id) => document.getElementById(id);
 const canal = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(CANAL) : null;
@@ -226,6 +227,64 @@ function iniciarSincronizador() {
   setInterval(sincronizarNube, 20000);
 }
 
+/* ---------- teléfonos conectados (emociones en vivo) ---------- */
+
+// La sala es un código secreto que viaja dentro de los QR; los teléfonos envían ahí su emoción y el panel la muestra.
+let salaMemoria = null;
+function obtenerSala() {
+  try {
+    const guardada = localStorage.getItem("anima_sala");
+    if (SALA_RE.test(guardada || "")) return guardada;
+    const nueva = nuevaSala();
+    localStorage.setItem("anima_sala", nueva);
+    return nueva;
+  } catch {
+    salaMemoria ||= nuevaSala();
+    return salaMemoria;
+  }
+}
+
+const conectados = new Conectados();
+let canalSala = null;
+let ultimoHtmlConectados = null;
+
+function renderConectados() {
+  const lista = conectados.vigentes();
+  const html = lista
+    .map((c) => {
+      const sinRostro = c.emocion === "ninguno";
+      const a = animoDe(c.emocion);
+      const tono = sinRostro ? "neutral" : a.tono;
+      const etiqueta = sinRostro ? "Sin rostro" : `${animoCliente(c.emocion).emoji} ${a.nombre}`;
+      return `<li><span class="nom">${esc(c.nombre || "Cliente sin nombre")}</span><span class="tag tono-${tono}">${esc(etiqueta)}</span></li>`;
+    })
+    .join("");
+  if (html === ultimoHtmlConectados) return;
+  ultimoHtmlConectados = html;
+  $("conectados").hidden = !lista.length;
+  $("conectados-lista").innerHTML = html;
+}
+
+function iniciarSala() {
+  if (canalSala || !cliente || !usuario) return;
+  try {
+    canalSala = cliente
+      .channel(`sala-${obtenerSala()}`, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "lectura" }, ({ payload }) => {
+        if (conectados.recibir(payload)) renderConectados();
+      })
+      .on("broadcast", { event: "adios" }, ({ payload }) => {
+        if (typeof payload?.id === "string" && conectados.quitar(payload.id)) renderConectados();
+      })
+      .subscribe((st) => {
+        if (st === "CHANNEL_ERROR" || st === "TIMED_OUT") aviso("No se pudo abrir el canal en vivo con los teléfonos. Revisá que Realtime esté habilitado en Supabase.", 6000);
+      });
+    setInterval(renderConectados, 1000);
+  } catch {
+    canalSala = null;
+  }
+}
+
 /* ---------- registro desde el teléfono del huésped ---------- */
 
 let temporizadorMovil = null;
@@ -266,7 +325,7 @@ async function abrirRegistroMovil() {
     return avisarRegistro(falta ? "Falta ejecutar registro_movil.sql en Supabase." : `No se pudo crear la invitación: ${e.message}`);
   }
   const url = new URL("registro.html", location.href);
-  url.hash = `t=${token}`;
+  url.hash = `t=${token}&s=${obtenerSala()}`;
   $("movil-link").value = url.href;
   $("movil-sub").textContent = `Pedile a ${nombre} que escanee el código con su teléfono. Vence en 15 minutos.`;
   $("movil-estado").textContent = "Esperando que el cliente complete el registro…";
@@ -289,7 +348,7 @@ async function abrirRegistroMovil() {
     clearInterval(temporizadorMovil);
     // Con el registro hecho, el código pasa a mostrar la pantalla del cliente en su propio teléfono.
     const animo = new URL("mi-animo.html", location.href);
-    animo.hash = `n=${encodeURIComponent(nombre)}`;
+    animo.hash = `n=${encodeURIComponent(nombre)}&s=${obtenerSala()}`;
     $("movil-link").value = animo.href;
     $("movil-sub").textContent = `Listo. Con este código nuevo, ${nombre} ve su cámara con su nombre y su estado de ánimo en su teléfono.`;
     $("movil-estado").textContent = `✓ ${nombre} quedó registrado desde su teléfono.`;
@@ -1207,6 +1266,7 @@ async function entrar(modo) {
     aviso(`No se pudo cargar el historial: ${e.message}`, 5000);
   }
   if (modo !== "demo") {
+    iniciarSala();
     try {
       await recargarGaleria();
       if (estado.store.cargarHuespedes) {
