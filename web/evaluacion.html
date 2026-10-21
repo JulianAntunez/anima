@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Ánima · Modo evaluación</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main class="eval">
+  <header class="cli-marca">
+    <i class="ti ti-building-skyscraper" aria-hidden="true"></i>
+    <span>Ánima · Modo evaluación</span>
+  </header>
+
+  <!-- 1. Presentación y consentimiento -->
+  <section id="ev-intro" class="card">
+    <h1>Validación con participantes</h1>
+    <p>Sirve para medir qué tan bien funciona Ánima con distintas personas. Cada participante hace siete gestos guiados (unos 2 minutos) y el sistema compara el gesto pedido con lo que detecta. También se registra su rostro y se verifica al final para medir el reconocimiento.</p>
+    <label class="campo"><span>Código del participante (sin nombre real)</span><input id="ev-codigo" type="text" maxlength="12" autocomplete="off"></label>
+    <label class="consent">
+      <input type="checkbox" id="ev-consent">
+      <span>Acepto participar. Se guardan solo mi código, las etiquetas de expresión y un vector numérico de mi rostro, únicamente en este navegador (sin fotos y sin enviar nada a internet). Puedo pedir que se borren.</span>
+    </label>
+    <div class="botones">
+      <button id="ev-empezar" class="primario" disabled><i class="ti ti-player-play" aria-hidden="true"></i>Empezar</button>
+      <button id="ev-ver"><i class="ti ti-table" aria-hidden="true"></i>Ver resultados</button>
+    </div>
+    <p id="ev-cuenta" class="estado-cli"></p>
+    <p id="ev-error" class="estado-cli" role="alert"></p>
+  </section>
+
+  <!-- 2. Sesión guiada -->
+  <section id="ev-sesion" class="card" hidden>
+    <p id="ev-paso" class="estado-cli"></p>
+    <div class="escenario ev-escenario">
+      <video id="ev-video" playsinline muted></video>
+    </div>
+    <div class="progreso" aria-hidden="true"><i id="ev-barra"></i></div>
+    <div id="ev-pedido" class="ev-pedido" data-esperada="">
+      <span id="ev-emoji" class="ev-emoji" aria-hidden="true"></span>
+      <div><strong id="ev-titulo"></strong><p id="ev-pista"></p></div>
+    </div>
+    <p id="ev-estado" class="estado-cli" role="status"></p>
+    <div class="botones"><button id="ev-cancelar">Cancelar</button></div>
+  </section>
+
+  <!-- 3. Fin de la sesión -->
+  <section id="ev-final" class="card" hidden>
+    <p id="ev-final-texto" class="ok"></p>
+    <div class="botones">
+      <button id="ev-otro" class="primario"><i class="ti ti-user-plus" aria-hidden="true"></i>Siguiente participante</button>
+      <button id="ev-ver2"><i class="ti ti-table" aria-hidden="true"></i>Ver resultados</button>
+    </div>
+  </section>
+
+  <!-- 4. Resultados -->
+  <section id="ev-resultados" class="card" hidden>
+    <h1>Resultados</h1>
+    <div id="ev-tablas"></div>
+    <div class="botones">
+      <button id="ev-csv"><i class="ti ti-download" aria-hidden="true"></i>CSV de expresiones</button>
+      <button id="ev-csv-rec"><i class="ti ti-download" aria-hidden="true"></i>CSV de reconocimiento</button>
+      <button id="ev-volver"><i class="ti ti-arrow-left" aria-hidden="true"></i>Volver</button>
+      <button id="ev-borrar" class="peligro"><i class="ti ti-trash" aria-hidden="true"></i>Borrar todo</button>
+    </div>
+  </section>
+
+  <p class="cli-privacidad"><i class="ti ti-lock" aria-hidden="true"></i>Los datos quedan solo en este navegador. Indicador aproximado de expresión facial, no un diagnóstico de la persona.</p>
+</main>
+
+<script type="module" src="js/evaluacion.js"></script>
+</body>
+</html>

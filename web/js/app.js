@@ -1329,6 +1329,7 @@ $("btn-config").addEventListener("click", abrirConfiguracion);
 $("cfg-camara").addEventListener("change", (e) => cambiarCamara(e.target.value));
 $("cfg-detectar").addEventListener("click", detectarCamaras);
 $("cfg-inicio").addEventListener("click", volverAlInicio);
+$("cfg-evaluacion").addEventListener("click", () => window.open("evaluacion.html", "_blank", "noopener"));
 $("cfg-sensibilidad").addEventListener("change", (e) => {
   estado.neutralBias = Number(e.target.value);
   try {
