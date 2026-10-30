@@ -7,7 +7,7 @@ import { CONFIG } from "./config.js";
 import { CANAL, datosCliente } from "./canal.js";
 import { cargarReconocedor, embeddingDe } from "./reconocimiento.js";
 import { buscar, promediar as promediarEmbeddings, decidirIdentidad } from "./reconocer.js";
-import { asociarCaras, principalDe } from "./seguimiento.js";
+import { asociarCaras, principalDe, caraParaRegistro } from "./seguimiento.js";
 import { galeria as cargarGaleria, agregarPersona, actualizarPersona, eliminarPersona, borrarPersonas, fichaHuesped, importarPersona, marcarEnNube, eliminarPorUid, corregirDatosPersona } from "./personas.js";
 import { planificarSincronia } from "./sincronia.js";
 import { nuevaSala, SALA_RE, Conectados } from "./sala.js";
@@ -408,11 +408,24 @@ async function tickReconocimiento(video) {
 
   if (rec.registro) {
     const r = rec.registro;
+    // Se registra a la cara más grande que NO esté ya reconocida como otra persona
+    const objetivo = caraParaRegistro(estado.caras, r.nombre, rec.galeria, r.caraId);
+    if (!objetivo) {
+      r.sinNuevo ||= ahora;
+      if (ahora - r.sinNuevo > 5000) {
+        rec.registro = null;
+        aviso("No hay ninguna persona sin registrar frente a la cámara.", 5000);
+      }
+      return;
+    }
+    r.sinNuevo = 0;
+    if (r.caraId && objetivo.id !== r.caraId) r.muestras = []; // cambió la cara elegida: se empieza de nuevo, sin mezclar personas
+    r.caraId = objetivo.id;
     if (ahora - r.ultimo < 350) return;
     rec.ocupado = true;
     try {
       r.ultimo = ahora;
-      r.muestras.push(await embeddingDe(video, principal.lm, video.videoWidth, video.videoHeight));
+      r.muestras.push(await embeddingDe(video, objetivo.lm, video.videoWidth, video.videoHeight));
       aviso(`Registrando… mirá a la cámara (${r.muestras.length}/${REG_MUESTRAS})`, 0);
       if (r.muestras.length >= REG_MUESTRAS) await terminarRegistro();
     } catch {
@@ -473,15 +486,32 @@ function iniciarRegistro() {
   if (!rec.listo) return avisarRegistro("El reconocimiento todavía se está cargando. Esperá unos segundos.");
   if (!$("cli-in-nombre").value.trim()) return avisarRegistro("Escribí el nombre del cliente antes de registrarlo.");
   if (!$("cli-consent").checked) return avisarRegistro("Tildá la casilla de consentimiento del cliente para poder registrarlo.");
-  $("cli-estado").textContent = "Registrando… pedile al cliente que mire a la cámara.";
-  rec.registro = { muestras: [], ultimo: 0, inicio: Date.now() };
+  const nombre = $("cli-in-nombre").value.trim();
+  const existente = rec.galeria.find((p) => p.nombre.toLowerCase() === nombre.toLowerCase());
+  if (existente) {
+    // El formulario se completa solo al reconocer a alguien: si el nombre ya es de un cliente registrado, solo se puede
+    // actualizar a ESA persona, y únicamente si está frente a la cámara. Nunca se guarda otra cara con ese nombre.
+    if (!estado.caras.some((c) => c.persona?.id === existente.id)) {
+      return avisarRegistro(`«${existente.nombre}» ya está registrado y no está frente a la cámara. Para registrar a otra persona, escribí su nombre.`);
+    }
+    if (!confirm(`«${existente.nombre}» ya está registrado.
+
+¿Querés actualizar su registro con la cara que ve la cámara ahora?
+Si querés registrar a otra persona, cancelá y escribí su nombre.`)) {
+      return avisarRegistro("Registro cancelado. Escribí el nombre de la persona nueva y volvé a intentar.");
+    }
+  } else if (!estado.caras.some((c) => !c.persona)) {
+    return avisarRegistro("Todas las personas que se ven ya están reconocidas. Para registrar a alguien nuevo, tiene que estar frente a la cámara.");
+  }
+  $("cli-estado").textContent = existente ? `Actualizando el registro de ${existente.nombre}…` : "Registrando… pedile al cliente nuevo que mire a la cámara. Se ignora a quienes ya están reconocidos.";
+  rec.registro = { muestras: [], ultimo: 0, inicio: Date.now(), caraId: null, sinNuevo: 0, nombre };
   aviso("Registrando… mirá a la cámara", 0);
 }
 
 async function terminarRegistro() {
-  const { muestras } = rec.registro;
+  const { muestras, caraId, nombre } = rec.registro;
   rec.registro = null;
-  const datos = { nombre: $("cli-in-nombre").value.trim(), habitacion: $("cli-in-hab").value.trim(), estadia: $("cli-in-estadia").value.trim() };
+  const datos = { nombre, habitacion: $("cli-in-hab").value.trim(), estadia: $("cli-in-estadia").value.trim() };
   const embedding = promediarEmbeddings(muestras);
   const parecido = buscar(embedding, rec.galeria);
   if (parecido && parecido.persona.nombre.toLowerCase() !== datos.nombre.toLowerCase()) {
@@ -489,16 +519,22 @@ async function terminarRegistro() {
     return;
   }
   const existente = rec.galeria.find((p) => p.nombre.toLowerCase() === datos.nombre.toLowerCase());
+  // Antes de pisar un registro existente, la cara tiene que ser la de esa persona
+  if (existente && (!parecido || parecido.persona.id !== existente.id)) {
+    aviso(`La cara que se vio no coincide con la de ${existente.nombre}: no se cambió su registro.`, 6000);
+    return;
+  }
   if (existente) await actualizarPersona({ ...existente, ...datos, embedding });
   else await agregarPersona({ ...datos, embedding });
   await recargarGaleria();
   rec.persona = rec.galeria.find((p) => p.nombre.toLowerCase() === datos.nombre.toLowerCase()) || null;
   if (rec.persona) enviarFichas([rec.persona]);
   rec.auto = false;
-  const principal = principalDe(estado.caras);
-  if (principal) {
-    principal.persona = rec.persona;
-    principal.verif = { candidato: null, dudas: 0 };
+  // El nombre se le asigna a la cara que se registró, no necesariamente a la más grande (puede haber otra persona al lado)
+  const registrada = estado.caras.find((c) => c.id === caraId) || caraParaRegistro(estado.caras, datos.nombre, rec.galeria);
+  if (registrada) {
+    registrada.persona = rec.persona;
+    registrada.verif = { candidato: null, dudas: 0 };
   }
   estadoRec();
   publicarCliente();

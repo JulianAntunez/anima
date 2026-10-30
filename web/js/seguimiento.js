@@ -28,6 +28,21 @@ export function asociarCaras(previas, nuevas, iouMinimo = 0.2) {
   return resultado;
 }
 
+// Cara a la que se le toma el registro de un cliente.
+//  - Nombre nuevo (nadie registrado con ese nombre): la más grande que NO esté ya reconocida. Quien ya está reconocido
+//    y se encuentra al lado se ignora.
+//  - Nombre que ya existe en la galería: solo sirve la cara reconocida como esa persona (para actualizar su registro).
+//    Nunca se guarda una cara distinta bajo el nombre de otro.
+// Si ya había una cara elegida (idPrevio) y sigue sirviendo, se mantiene, para no saltar de una persona a otra.
+export function caraParaRegistro(caras, nombre, galeria = [], idPrevio = null) {
+  const n = String(nombre || "").trim().toLowerCase();
+  const existe = galeria.some((p) => p.nombre.toLowerCase() === n);
+  const sirve = (c) => (existe ? c.persona?.nombre.toLowerCase() === n : !c.persona);
+  const previa = caras.find((c) => c.id === idPrevio);
+  if (previa && sirve(previa)) return previa;
+  return principalDe(caras.filter(sirve));
+}
+
 // La cara principal es la más grande (la persona más cercana a la cámara).
 export function principalDe(caras) {
   let mejor = null;
