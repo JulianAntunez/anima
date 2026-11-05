@@ -336,6 +336,14 @@ def main():
         )
 
         st.markdown("---")
+        st.markdown("### Interfaz principal: Ánima Web")
+        st.info(
+            "Este tablero analiza fotos y archivos CSV. El panel de recepción completo (cámara en vivo, "
+            "pantalla del cliente, registro desde el teléfono) es Ánima Web: ejecutá `python ejecutar_web.py` "
+            "o abrí https://julianantunez.github.io/anima/"
+        )
+
+        st.markdown("---")
         st.markdown("### Aplicación de Escritorio")
         st.info("Para transmisión en vivo a 60 FPS con tu webcam, ejecuta en terminal:")
         st.code(".\\venv\\Scripts\\python.exe main.py", language="powershell")

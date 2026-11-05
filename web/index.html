@@ -19,6 +19,8 @@
     <label class="campo"><span>Contraseña</span><input id="login-pass" type="password" autocomplete="current-password" required></label>
     <div class="acciones"><button id="btn-login" class="primario" type="submit"><i class="ti ti-login" aria-hidden="true"></i>Ingresar</button></div>
     <p id="login-error" class="error" role="alert" hidden></p>
+    <div class="acciones"><button id="btn-visitante" class="secundario" type="button"><i class="ti ti-eye" aria-hidden="true"></i>Entrar como visitante</button></div>
+    <p class="lede" style="margin-top:8px">Sin cuenta podés probar la cámara o el modo demo en este navegador. No se guarda nada en la nube.</p>
   </form>
 </section>
 
@@ -59,13 +61,18 @@
     <div class="barra-der">
       <span class="estado"><span id="punto" class="punto"></span><span id="estado-texto">Cámara activa</span></span>
       <span id="reloj" class="reloj">--:--</span>
-      <button id="btn-config" title="Configuración"><i class="ti ti-settings" aria-hidden="true"></i>Configuración</button>
-      <button id="btn-calibrar" title="Medir tu cara neutra para ajustar la lectura"><i class="ti ti-adjustments" aria-hidden="true"></i>Calibrar</button>
       <button id="btn-pausa"><i class="ti ti-player-pause" aria-hidden="true"></i><span>Pausar</span></button>
-      <button id="btn-csv" title="Descargar el día en CSV"><i class="ti ti-download" aria-hidden="true"></i>CSV</button>
-      <button id="btn-pdf" title="Generar un informe en PDF"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>PDF</button>
-      <button id="btn-salir" hidden title="Cerrar sesión"><i class="ti ti-logout" aria-hidden="true"></i>Salir</button>
-      <button id="btn-borrar" class="peligro" title="Borrar los datos guardados"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      <details class="menu-mas" id="menu-mas">
+        <summary class="boton-resumen" aria-label="Más opciones"><i class="ti ti-dots" aria-hidden="true"></i>Más</summary>
+        <div class="menu-lista">
+          <button id="btn-config" title="Configuración"><i class="ti ti-settings" aria-hidden="true"></i>Configuración</button>
+          <button id="btn-calibrar" title="Medir tu cara neutra para ajustar la lectura"><i class="ti ti-adjustments" aria-hidden="true"></i>Calibrar</button>
+          <button id="btn-csv" title="Descargar el día en CSV"><i class="ti ti-download" aria-hidden="true"></i>Descargar CSV</button>
+          <button id="btn-pdf" title="Generar un informe en PDF"><i class="ti ti-file-type-pdf" aria-hidden="true"></i>Informe PDF</button>
+          <button id="btn-salir" hidden title="Cerrar sesión"><i class="ti ti-logout" aria-hidden="true"></i>Cerrar sesión</button>
+          <button id="btn-borrar" class="peligro" title="Borrar los datos guardados"><i class="ti ti-trash" aria-hidden="true"></i>Borrar datos guardados</button>
+        </div>
+      </details>
     </div>
   </header>
 
@@ -77,84 +84,40 @@
   </section>
 
   <div class="grilla">
-    <section class="card foco" aria-label="Cliente en el mostrador">
-      <div id="alerta" class="aviso-alerta" role="alert" hidden>
-        <i class="ti ti-alert-triangle" aria-hidden="true"></i>
-        <span id="alerta-texto">Atención sugerida: el cliente parece molesto.</span>
-        <button id="alerta-ok">Entendido</button>
-      </div>
+    <div class="izquierda">
+      <section class="card foco" aria-label="Cliente en el mostrador">
+        <div id="alerta" class="aviso-alerta" role="alert" hidden>
+          <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+          <span id="alerta-texto">Atención sugerida: el cliente parece molesto.</span>
+          <button id="alerta-ok">Entendido</button>
+        </div>
 
-      <div class="foco-cuerpo">
         <div class="escenario" id="escenario">
           <video id="video" playsinline muted></video>
           <div id="placeholder" class="placeholder"><i class="ti ti-user" aria-hidden="true"></i><span id="placeholder-texto">Esperando cámara</span></div>
           <div id="caja" class="caja" hidden><span id="chip" class="chip"></span></div>
           <div id="extras" class="extras"></div>
-        </div>
-
-        <div class="lectura">
           <div id="animo" class="animo tono-neutral">
             <span class="a-label">Estado de ánimo</span>
             <span id="animo-nombre" class="a-nombre">Sin cliente</span>
             <div class="barra-conf"><div id="conf-barra"></div></div>
             <span id="conf-texto" class="a-conf">&nbsp;</span>
           </div>
-          <div class="sugerencia">
-            <span class="s-label">Sugerencia</span>
-            <p id="sugerencia">No hay una persona frente al mostrador.</p>
-          </div>
         </div>
-      </div>
 
-      <p id="presentes" class="presentes" hidden></p>
+        <div class="sugerencia">
+          <span class="s-label">Sugerencia</span>
+          <p id="sugerencia">No hay una persona frente al mostrador.</p>
+        </div>
 
-      <div class="linea">
-        <span class="l-label">Últimos 2 minutos</span>
-        <div id="linea" class="linea-barra"></div>
-      </div>
-    </section>
+        <p id="presentes" class="presentes" hidden></p>
 
-    <aside class="derecha">
-      <section class="card" aria-label="Cliente en el mostrador">
-        <h2>Cliente en el mostrador</h2>
-        <form id="form-cliente" class="form-cliente" autocomplete="off">
-          <label class="campo"><span>Nombre</span><input id="cli-in-nombre" type="text" maxlength="60" placeholder="Ej.: Julián Antúnez"></label>
-          <div class="fila2">
-            <label class="campo"><span>Habitación</span><input id="cli-in-hab" type="text" maxlength="12" placeholder="402"></label>
-            <label class="campo"><span>Estadía</span><input id="cli-in-estadia" type="text" maxlength="40" placeholder="Hasta el 07/10"></label>
-          </div>
-          <div class="botones">
-            <button type="button" id="btn-abrir-cliente"><i class="ti ti-device-desktop" aria-hidden="true"></i>Abrir pantalla del cliente</button>
-            <button type="submit" class="primario"><i class="ti ti-send" aria-hidden="true"></i>Mostrar al cliente</button>
-            <button type="button" id="btn-guardar-cliente" hidden title="Guarda los cambios en la ficha del cliente reconocido"><i class="ti ti-device-floppy" aria-hidden="true"></i>Guardar cambios</button>
-            <button type="button" id="btn-limpiar-cliente"><i class="ti ti-eraser" aria-hidden="true"></i>Limpiar</button>
-          </div>
-          <p id="cli-estado" class="estado-cli" role="status"></p>
-
-          <div class="reconocimiento">
-            <p class="estado-cli" style="margin:0 0 8px">Reconocimiento automático: tildá el consentimiento y apretá <strong>Registrar cliente</strong> una vez. Después lo identifica solo y carga sus datos; si los corregís, apretá <strong>Guardar cambios</strong>.</p>
-            <label class="consent consent-chico">
-              <input type="checkbox" id="cli-consent">
-              <span>El cliente acepta que se guarden su nombre, los datos de su estadía y un vector numérico de su rostro (sin fotos) en la base del hotel.</span>
-            </label>
-            <div class="botones">
-              <button type="button" id="btn-registrar-cliente"><i class="ti ti-user-plus" aria-hidden="true"></i>Registrar cliente</button>
-              <button type="button" id="btn-movil" title="El cliente se registra con su propio teléfono"><i class="ti ti-device-mobile" aria-hidden="true"></i>Desde su teléfono</button>
-              <button type="button" id="btn-olvidar-cliente"><i class="ti ti-user-minus" aria-hidden="true"></i>Olvidar</button>
-              <button type="button" id="btn-borrar-registrados" class="peligro" title="Borrar todos los clientes registrados"><i class="ti ti-trash" aria-hidden="true"></i></button>
-            </div>
-            <p id="rec-estado" class="estado-cli" role="status">Reconocimiento: se activa al iniciar la cámara.</p>
-          </div>
-        </form>
+        <div class="linea">
+          <span class="l-label">Últimos 2 minutos</span>
+          <div id="linea" class="linea-barra"></div>
+        </div>
       </section>
-      <section class="card" id="conectados" aria-label="Conectados por teléfono" hidden>
-        <h2>Conectados por teléfono</h2>
-        <ul id="conectados-lista" class="lista"></ul>
-      </section>
-      <section class="card">
-        <h2>Últimas atenciones</h2>
-        <ul id="lista" class="lista"><li class="vacio">Todavía no hay atenciones registradas hoy.</li></ul>
-      </section>
+
       <section class="card">
         <h2>Ánimo por hora</h2>
         <div id="horas" class="horas"></div>
@@ -164,6 +127,49 @@
           <span><i class="sw sw-atencion"></i>Atención</span>
           <span><i class="sw sw-alerta"></i>Molesto</span>
         </div>
+      </section>
+    </div>
+
+    <aside class="derecha">
+      <section class="card" aria-label="Cliente en el mostrador">
+        <h2>Cliente</h2>
+        <form id="form-cliente" class="form-cliente" autocomplete="off">
+          <label class="campo"><span>Nombre</span><input id="cli-in-nombre" type="text" maxlength="60" placeholder="Ej.: Julián Antúnez"></label>
+          <div class="fila2">
+            <label class="campo"><span>Habitación</span><input id="cli-in-hab" type="text" maxlength="12" placeholder="402"></label>
+            <label class="campo"><span>Estadía</span><input id="cli-in-estadia" type="text" maxlength="40" placeholder="Hasta el 07/10"></label>
+          </div>
+          <button type="submit" class="primario ancho"><i class="ti ti-send" aria-hidden="true"></i>Mostrar al cliente</button>
+          <button type="button" id="btn-guardar-cliente" class="ancho" hidden title="Guarda los cambios en la ficha del cliente reconocido"><i class="ti ti-device-floppy" aria-hidden="true"></i>Guardar cambios</button>
+          <div class="botones botones-2">
+            <button type="button" id="btn-registrar-cliente"><i class="ti ti-user-plus" aria-hidden="true"></i>Registrar</button>
+            <button type="button" id="btn-movil" title="El cliente se registra con su propio teléfono"><i class="ti ti-device-mobile" aria-hidden="true"></i>Con su teléfono</button>
+          </div>
+          <label class="consent consent-chico">
+            <input type="checkbox" id="cli-consent">
+            <span>El cliente acepta que se guarden su nombre, su estadía y un vector numérico de su rostro (sin fotos).</span>
+          </label>
+          <div class="botones botones-chicos">
+            <button type="button" id="btn-abrir-cliente" class="suave"><i class="ti ti-device-desktop" aria-hidden="true"></i>Pantalla del cliente</button>
+            <button type="button" id="btn-limpiar-cliente" class="suave"><i class="ti ti-eraser" aria-hidden="true"></i>Limpiar</button>
+            <button type="button" id="btn-olvidar-cliente" class="suave"><i class="ti ti-user-minus" aria-hidden="true"></i>Olvidar</button>
+            <button type="button" id="btn-borrar-registrados" class="suave peligro" title="Borrar todos los clientes registrados" aria-label="Borrar todos los clientes registrados"><i class="ti ti-trash" aria-hidden="true"></i></button>
+          </div>
+          <p id="cli-estado" class="estado-cli" role="status"></p>
+          <p id="rec-estado" class="estado-cli" role="status">Reconocimiento: se activa al iniciar la cámara.</p>
+          <details class="ayuda">
+            <summary>¿Cómo funciona el reconocimiento?</summary>
+            <p>Tildá el consentimiento y apretá <strong>Registrar</strong> una vez. Después el sistema lo identifica solo y carga sus datos. Si los corregís, apretá <strong>Guardar cambios</strong>.</p>
+          </details>
+        </form>
+      </section>
+      <section class="card" id="conectados" aria-label="Conectados por teléfono" hidden>
+        <h2>Conectados por teléfono</h2>
+        <ul id="conectados-lista" class="lista"></ul>
+      </section>
+      <section class="card">
+        <h2>Últimas atenciones</h2>
+        <ul id="lista" class="lista"><li class="vacio">Todavía no hay atenciones registradas hoy.</li></ul>
       </section>
     </aside>
   </div>

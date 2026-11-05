@@ -2,6 +2,26 @@
 
 Sistema de detección de rostros, clasificación de expresiones y reconocimiento opcional de huéspedes en tiempo real, con una web (carpeta `web/`) conectada a Supabase.
 
+## ▶ Cómo ejecutar Ánima
+
+**La interfaz principal es Ánima Web** (carpeta `web/`): panel de recepción, pantalla del cliente, registro desde el teléfono y modo evaluación. Ya está publicada en **https://julianantunez.github.io/anima/** y también se ejecuta en local, sin instalar nada (solo Python 3):
+
+```bash
+python ejecutar_web.py
+```
+
+Se abre `http://localhost:8765`. Requiere internet (algunas librerías se descargan de una CDN). En la pantalla de ingreso, **«Entrar como visitante»** permite probar la cámara o el modo demo sin cuenta; los datos quedan solo en el navegador. Con cuenta del personal se usa la base en la nube (Supabase).
+
+| Interfaz | Para qué sirve | Cómo se ejecuta |
+|---|---|---|
+| **Ánima Web** (principal) | Recepción en vivo, pantalla del cliente, registro por QR, informes en PDF | `python ejecutar_web.py` |
+| Aplicación de escritorio (OpenCV) | Versión original en Python con atajos de teclado | `python main.py` |
+| Tablero de Streamlit | Analizar fotos y archivos CSV | `python main.py --web` |
+
+> Si ejecutás `app.py` o `main.py --web` se abre solo el tablero de Streamlit, que **no** es la interfaz principal.
+
+---
+
 Aplicación modular de visión por computadora y aprendizaje profundo optimizada para ejecutarse en tiempo real sobre **CPU estándar** en Windows 11. Integra **MediaPipe BlazeFace** para detección facial ultrarrápida, una red neuronal profunda **FER+ en ONNX Runtime** para clasificar 7 emociones humanas, telemetría continua en **CSV (ISO 8601)**, seguimiento multirrostro con suavizado temporal, una interfaz gráfica de escritorio en **OpenCV** y un dashboard interactivo en **Streamlit**.
 
 ---
@@ -37,7 +57,8 @@ Aplicación modular de visión por computadora y aprendizaje profundo optimizada
 - **Seguimiento Multirrostro (*Face Tracking*)**: Asignación de ID persistente a cada rostro mediante solapamiento espacial (IoU) y distancia euclidiana de centroides.
 - **Registro y Telemetría en CSV**: Guardado automático de marcas temporales ISO 8601 (con zona horaria UTC), ID de sesión, ID de rostro, emoción asignada, confianza y el vector completo de las 7 probabilidades.
 - **Privacidad por Diseño (*Privacy by Design*)**: No se almacenan imágenes en disco por defecto. Las capturas son estrictamente voluntarias y bajo demanda del operador.
-- **Doble Interfaz de Usuario**:
+- **Tres interfaces de usuario**:
+  - Ánima Web (principal), en el navegador, conectada a Supabase.
   - Interfaz nativa OpenCV a 50+ FPS con HUD dinámico y atajos de teclado.
   - Dashboard web moderno en Streamlit para análisis de imágenes y minería visual de los CSVs históricos.
 

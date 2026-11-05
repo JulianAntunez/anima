@@ -11,11 +11,68 @@ const st = {
   stream: null,
   ultimaLectura: 0,
   emocion: "ninguno",
+  manual: { nombre: "", habitacion: "", estadia: "" },
+  principal: { nombre: "", emocion: null },
+  otras: [],
 };
 
-function saludo(nombre, habitacion, estadia) {
-  $("cli-saludo").textContent = nombre ? `Hola, ${nombre}` : "Te damos la bienvenida";
-  $("cli-datos").textContent = [habitacion ? `Habitación ${habitacion}` : "", estadia].filter(Boolean).join(" · ");
+function unir(nombres) {
+  if (nombres.length < 2) return nombres.join("");
+  return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+}
+
+// Con una persona: «Hola, Nombre». Con dos o más: saludo general y los nombres debajo.
+function saludo() {
+  const nombres = [];
+  const agregar = (n) => {
+    if (n && !nombres.some((x) => x.toLowerCase() === n.toLowerCase())) nombres.push(n);
+  };
+  if (!st.ocultar) {
+    agregar(st.principal.nombre);
+    st.otras.forEach((o) => agregar(o.nombre));
+  }
+  const { nombre, habitacion, estadia } = st.manual;
+  const personas = (st.principal.emocion ? 1 : 0) + st.otras.length;
+  if (personas >= 2 && !st.ocultar) {
+    $("cli-saludo").textContent = "Hola, te damos la bienvenida";
+    $("cli-datos").textContent = unir(nombres);
+  } else {
+    const quien = nombre || nombres[0] || "";
+    $("cli-saludo").textContent = quien ? `Hola, ${quien}` : "Te damos la bienvenida";
+    $("cli-datos").textContent = [habitacion ? `Habitación ${habitacion}` : "", estadia].filter(Boolean).join(" · ");
+  }
+}
+
+// Con 2 o más personas se muestra una tarjeta por cada una, debajo de la cámara.
+function pintarTarjetas() {
+  const cont = $("cli-tarjetas");
+  const gente = st.ocultar || !st.principal.emocion ? [] : [st.principal, ...st.otras];
+  const multi = gente.length >= 2;
+  $("cli-cuerpo").classList.toggle("multi", multi);
+  while (cont.children.length < (multi ? gente.length : 0)) {
+    const t = document.createElement("div");
+    t.className = "animo cli-tarjeta";
+    t.append(Object.assign(document.createElement("span"), { className: "ct-nombre" }), Object.assign(document.createElement("span"), { className: "ct-emoji" }));
+    cont.appendChild(t);
+  }
+  [...cont.children].forEach((el, i) => {
+    const g = multi ? gente[i] : null;
+    el.hidden = !g;
+    if (!g) return;
+    const a = animoCliente(g.emocion);
+    el.className = `animo cli-tarjeta tono-${a.tono}`;
+    el.children[0].textContent = g.nombre || "";
+    el.children[1].textContent = a.emoji;
+    el.children[1].setAttribute("role", "img");
+    el.children[1].setAttribute("aria-label", a.nombre);
+  });
+}
+
+// El nombre va dentro del recuadro; si la cara está pegada al borde de arriba, el rótulo se pone adentro.
+function rotulo(el, caja, nombre, emoji) {
+  const chip = el.firstChild;
+  chip.textContent = nombre ? `${nombre} ${emoji}` : emoji;
+  chip.classList.toggle("dentro", caja.y < 0.1);
 }
 
 function pintarOtras(otras) {
@@ -37,13 +94,11 @@ function pintarOtras(otras) {
     el.style.top = `${o.caja.y * 100}%`;
     el.style.width = `${o.caja.w * 100}%`;
     el.style.height = `${o.caja.h * 100}%`;
-    el.firstChild.textContent = o.nombre ? `${o.nombre} ${a.emoji}` : a.emoji;
+    rotulo(el, o.caja, o.nombre, a.emoji);
   });
-  const nombres = lista.map((o) => o.nombre).filter(Boolean);
-  $("cli-grupo").textContent = nombres.length ? `También en el mostrador: ${nombres.join(", ")}` : "";
 }
 
-function pintar(emocion, caja) {
+function pintar(emocion, caja, nombre = "") {
   const a = animoCliente(emocion);
   $("cli-animo").className = `animo cli-animo tono-${a.tono}`;
   const emoji = $("cli-emoji");
@@ -58,6 +113,7 @@ function pintar(emocion, caja) {
     el.style.top = `${caja.y * 100}%`;
     el.style.width = `${caja.w * 100}%`;
     el.style.height = `${caja.h * 100}%`;
+    rotulo(el, caja, nombre, a.emoji);
   } else {
     el.hidden = true;
   }
@@ -74,6 +130,7 @@ async function abrirCamara() {
     v.srcObject = st.stream;
     await v.play();
     $("cli-escenario").style.aspectRatio = `${v.videoWidth} / ${v.videoHeight}`;
+    $("cli-escenario").style.setProperty("--ar", String(v.videoWidth / v.videoHeight));
     $("cli-placeholder").hidden = true;
   } catch {
     st.stream = null;
@@ -95,6 +152,9 @@ function actualizarEscena() {
     $("cli-placeholder-texto").textContent = "Expresión oculta";
     $("cli-animo").hidden = true;
     pintar("ninguno", null);
+    pintarOtras([]);
+    pintarTarjetas();
+    saludo();
     return;
   }
   $("cli-animo").hidden = false;
@@ -114,7 +174,10 @@ function actualizarEscena() {
 
 canal.onmessage = ({ data }) => {
   if (!data || typeof data !== "object") return;
-  if (data.tipo === "cliente") saludo(data.nombre, data.habitacion, data.estadia);
+  if (data.tipo === "cliente") {
+    st.manual = { nombre: data.nombre || "", habitacion: data.habitacion || "", estadia: data.estadia || "" };
+    saludo();
+  }
   if (data.tipo === "estado") {
     st.activo = !!data.activo;
     st.demo = !!data.demo;
@@ -127,8 +190,12 @@ canal.onmessage = ({ data }) => {
   if (data.tipo === "lectura" && !st.ocultar) {
     st.ultimaLectura = Date.now();
     st.emocion = data.emocion || "ninguno";
-    pintar(st.emocion, data.emocion ? data.caja : null);
-    pintarOtras(data.emocion ? data.otras : []);
+    st.principal = { nombre: data.emocion ? data.nombre || "" : "", emocion: data.emocion || null };
+    st.otras = data.emocion ? (data.otras || []).filter((o) => o?.caja) : [];
+    pintar(st.emocion, data.emocion ? data.caja : null, st.principal.nombre);
+    pintarOtras(st.otras);
+    pintarTarjetas();
+    saludo();
   }
 };
 
@@ -136,8 +203,12 @@ canal.onmessage = ({ data }) => {
 setInterval(() => {
   if (st.activo && !st.ocultar && Date.now() - st.ultimaLectura > 2500 && st.emocion !== "ninguno") {
     st.emocion = "ninguno";
+    st.principal = { nombre: "", emocion: null };
+    st.otras = [];
     pintar("ninguno", null);
     pintarOtras([]);
+    pintarTarjetas();
+    saludo();
   }
 }, 1000);
 

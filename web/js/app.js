@@ -581,7 +581,7 @@ if (canal) {
 /* ---------- render ---------- */
 
 function renderFoco(lectura, caja) {
-  canal?.postMessage({ tipo: "lectura", emocion: lectura ? lectura.emocion : null, confianza: lectura ? lectura.confianza : 0, caja: caja || null, otras: estado.extrasCanal });
+  canal?.postMessage({ tipo: "lectura", emocion: lectura ? lectura.emocion : null, confianza: lectura ? lectura.confianza : 0, caja: caja || null, nombre: caja && rec.persona ? rec.persona.nombre : "", otras: estado.extrasCanal });
   const animo = animoDe(lectura ? lectura.emocion : "ninguno");
   const tono = animo.tono;
   $("animo").className = `animo tono-${tono}`;
@@ -1361,6 +1361,18 @@ $("form-pdf").addEventListener("submit", (e) => {
 });
 $("btn-borrar").addEventListener("click", borrarDatos);
 $("alerta-ok").addEventListener("click", () => ($("alerta").hidden = true));
+
+// Menú «Más»: se cierra al elegir una opción, al tocar afuera o con Escape.
+const menuMas = $("menu-mas");
+menuMas.addEventListener("click", (e) => {
+  if (e.target.closest("button")) menuMas.open = false;
+});
+document.addEventListener("click", (e) => {
+  if (menuMas.open && !menuMas.contains(e.target)) menuMas.open = false;
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && menuMas.open) menuMas.open = false;
+});
 $("btn-config").addEventListener("click", abrirConfiguracion);
 $("cfg-camara").addEventListener("change", (e) => cambiarCamara(e.target.value));
 $("cfg-detectar").addEventListener("click", detectarCamaras);
@@ -1380,6 +1392,11 @@ navigator.mediaDevices?.addEventListener?.("devicechange", () => {
 });
 
 $("login-form").addEventListener("submit", ingresar);
+// Visitante: usa la cámara o el modo demo sin cuenta. Los datos quedan solo en este navegador y no se toca la base.
+$("btn-visitante").addEventListener("click", () => {
+  $("login").hidden = true;
+  $("inicio").hidden = false;
+});
 $("btn-salir").addEventListener("click", salir);
 
 window.addEventListener("pagehide", () => {

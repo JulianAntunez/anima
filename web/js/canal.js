@@ -2,7 +2,8 @@
 //
 // panel -> cliente:
 //   { tipo: "cliente", nombre, habitacion, estadia }     datos cargados por el recepcionista
-//   { tipo: "lectura", emocion|null, confianza, caja }   expresión actual (null = sin rostro); caja ya viene en espejo
+//   { tipo: "lectura", emocion|null, confianza, caja, nombre, otras }   expresión actual (null = sin rostro); caja ya viene en espejo;
+//                                                       nombre = persona principal si está registrada; otras = [{ caja, emocion, nombre }]
 //   { tipo: "estado", activo, demo }                     cámara activa, en pausa o modo demo
 // cliente -> panel:
 //   { tipo: "hola" }                                      pide que el panel reenvíe el estado actual
