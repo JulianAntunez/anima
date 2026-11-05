@@ -41,7 +41,7 @@ const estado = {
   calibrando: null,
   landmarker: null,
   stream: null,
-  rafId: null,
+  detenerReloj: null,
   demoTimer: null,
   caras: [],
   secCaras: 0,
@@ -891,8 +891,8 @@ async function iniciarCamara(deviceId = localStorage.getItem("camaraId") || unde
 }
 
 function detenerCamara() {
-  cancelAnimationFrame(estado.rafId);
-  estado.rafId = null;
+  estado.detenerReloj?.();
+  estado.detenerReloj = null;
   estado.stream?.getTracks().forEach((t) => t.stop());
   estado.stream = null;
   $("video").srcObject = null;
@@ -995,10 +995,29 @@ function procesarCaras(video, res) {
   procesarBlendshapes(principal.bs, espejo(principal.caja));
 }
 
+// El ritmo del análisis lo marca un Worker: requestAnimationFrame y los temporizadores comunes se frenan
+// cuando la ventana queda tapada u oculta (por ejemplo, la pantalla del cliente a pantalla completa
+// encima de este panel) y entonces los emojis del cliente se quedaban quietos. Los del Worker no se frenan.
+function crearReloj(ms, alTick) {
+  try {
+    const url = URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${ms});`], { type: "text/javascript" }));
+    const worker = new Worker(url);
+    worker.onmessage = alTick;
+    return () => {
+      worker.terminate();
+      URL.revokeObjectURL(url);
+    };
+  } catch {
+    const id = setInterval(alTick, ms);
+    return () => clearInterval(id);
+  }
+}
+
 function bucleCamara() {
   const video = $("video");
-  const paso = (ahora) => {
-    estado.rafId = requestAnimationFrame(paso);
+  estado.detenerReloj?.();
+  const paso = () => {
+    const ahora = performance.now();
     if (video.readyState < 2 || ahora - estado.ultimaLectura < MS_ENTRE_LECTURAS) return;
     if (video.currentTime === estado.ultimoVideoTime) return;
     estado.ultimaLectura = ahora;
@@ -1012,7 +1031,7 @@ function bucleCamara() {
     }
     procesarCaras(video, res);
   };
-  estado.rafId = requestAnimationFrame(paso);
+  estado.detenerReloj = crearReloj(Math.round(MS_ENTRE_LECTURAS / 2), paso);
 }
 
 /* ---------- modo demo (sin cámara) ---------- */
